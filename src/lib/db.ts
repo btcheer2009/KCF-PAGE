@@ -1,4 +1,4 @@
-import { db, auth } from './firebase';
+import { db, auth, storage } from './firebase';
 import { 
   collection, 
   doc, 
@@ -12,6 +12,7 @@ import {
   query,
   limit
 } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 export enum OperationType {
   CREATE = 'create',
@@ -212,4 +213,13 @@ export async function saveDoc(colName: string, docId: string, data: any) {
   } catch (e) {
     handleFirestoreError(e, OperationType.WRITE, `${colName}/${docId}`);
   }
+}
+
+/**
+ * Uploads a file to Firebase Storage and returns the download URL.
+ */
+export async function uploadFileToStorage(pathStr: string, file: File): Promise<string> {
+  const imageRef = ref(storage, pathStr);
+  await uploadBytes(imageRef, file);
+  return await getDownloadURL(imageRef);
 }

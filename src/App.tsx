@@ -21,7 +21,7 @@ import ScheduleCalendar from './components/ScheduleCalendar';
 import DonationDisclosure from './components/DonationDisclosure';
 import { EVENTS, INITIAL_NOTICES, INITIAL_TEAMS, INITIAL_ATHLETES, INITIAL_ASSOCIATION_INFO, INITIAL_COMPETITIONS, INITIAL_DONATION_RECORDS } from './data';
 import { Notice, CheerTeam, InquirySubmission, KCFEvent, Athlete, AssociationInfo, CompetitionPost, DonationRecord, HomepageContent, RelatedLink } from './types';
-import { listenCollection, listenDoc, saveItem, deleteItem, saveDoc, seedInitialCollection, seedInitialDoc } from './lib/db';
+import { listenCollection, listenDoc, saveItem, deleteItem, saveDoc, seedInitialCollection, seedInitialDoc, uploadFileToStorage } from './lib/db';
 
 
 // IndexedDB utility for high-capacity persistent local storage of images (base64)
@@ -1348,32 +1348,17 @@ export default function App() {
       return;
     }
 
-    if (file.size > 15 * 1024 * 1024) {
-      showToast('이미지 업로드 실패: 최대 15MB 이하만 업로드 가능합니다.', 'error');
-      return;
+    try {
+      showToast('공용 스토리지에 이미지 업로드 중...', 'info');
+      const uniqueFileName = `homepage/${Date.now()}-${file.name}`;
+      const downloadUrl = await uploadFileToStorage(uniqueFileName, file);
+      
+      setHomeHeroImageUrl(downloadUrl);
+      showToast('이미지가 성공적으로 스토리지에 업로드되었습니다! [홈페이지 설정 저장하기] 버튼을 누르면 사이트에 최종 적용됩니다.', 'success');
+    } catch (err: any) {
+      console.error("Hero image storage upload failed:", err);
+      showToast(`이미지 스토리지 업로드 실패: ${err.message || err}`, 'error');
     }
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      if (event.target?.result && typeof event.target.result === 'string') {
-        try {
-          const isValid = await validateImageDataURL(event.target.result);
-          if (!isValid) {
-            showToast('이미지 업로드 실패: 유효하지 않은 이미지 파일입니다.', 'error');
-            return;
-          }
-
-          showToast('히어로 이미지 압축 중...', 'info');
-          const compressed = await resizeAndCompressImage(event.target.result, file);
-          setHomeHeroImageUrl(compressed);
-          showToast('임시 미리보기가 설정되었습니다. [홈페이지 설정 저장하기] 버튼을 누르면 최종 저장됩니다.', 'success');
-        } catch (err) {
-          console.error("Hero image compression failed:", err);
-          showToast('이미지 최적화에 실패했습니다.', 'error');
-        }
-      }
-    };
-    reader.readAsDataURL(file);
   };
 
   const handleUpdateAssociationInfo = (updatedInfo: AssociationInfo) => {
@@ -6158,11 +6143,12 @@ export default function App() {
                                 donationDisclosure: homeDonationDisclosure.trim(),
                                 relatedLinks: homeRelatedLinks
                               };
-                              await setHomepageContent(payload);
-                              showToast('홈페이지 설정이 성공적으로 저장 및 배포되었습니다!', 'success');
+                              await saveDoc('site_content', 'homepage', payload);
+                              rawSetHomepageContent(payload);
+                              showToast('저장되었습니다. 다른 PC와 모바일에서도 반영됩니다.', 'success');
                             } catch (error: any) {
                               console.error("Save failed:", error);
-                              showToast(`홈페이지 설정 저장 실패 (사유: ${error.message || error})`, 'error');
+                              showToast('공용 데이터베이스 저장에 실패했습니다. DB 연결/권한/API 키를 확인해주세요.', 'error');
                             }
                           }}
                           className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-6 py-3 rounded-xl transition flex items-center gap-2 shadow-xs cursor-pointer flex-1 sm:flex-none justify-center"
