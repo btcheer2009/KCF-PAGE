@@ -1,0 +1,179 @@
+{
+  "entities": {
+    "Notice": {
+      "title": "Notice",
+      "description": "Notice board post",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "category": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "date": { "type": "string" },
+        "views": { "type": "number" },
+        "isImportant": { "type": "boolean" }
+      },
+      "required": ["id", "title", "content", "category"]
+    },
+    "CheerTeam": {
+      "title": "CheerTeam",
+      "description": "Registered cheerleading team",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "region": { "type": "string" },
+        "memberCount": { "type": "number" },
+        "coach": { "type": "string" },
+        "established": { "type": "string" },
+        "description": { "type": "string" },
+        "contact": { "type": "string" }
+      },
+      "required": ["id", "name", "category", "region"]
+    },
+    "KCFEvent": {
+      "title": "KCFEvent",
+      "description": "Schedules and events of the KCF",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "type": { "type": "string" },
+        "location": { "type": "string" },
+        "status": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["id", "title", "date", "type"]
+    },
+    "Athlete": {
+      "title": "Athlete",
+      "description": "Registered athlete or coach info",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "regNumber": { "type": "string" },
+        "birthDate": { "type": "string" },
+        "gender": { "type": "string" },
+        "teamName": { "type": "string" },
+        "category": { "type": "string" },
+        "level": { "type": "string" },
+        "registerDate": { "type": "string" },
+        "validUntil": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "name", "regNumber"]
+    },
+    "InquirySubmission": {
+      "title": "InquirySubmission",
+      "description": "Online inquiry submitted by users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "teamName": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "region": { "type": "string" },
+        "category": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "submittedAt": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "name", "phone", "title", "content"]
+    },
+    "CompetitionPost": {
+      "title": "CompetitionPost",
+      "description": "Information about official competitions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "category": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "date": { "type": "string" },
+        "views": { "type": "number" },
+        "imageUrl": { "type": "string" },
+        "organizer": { "type": "string" },
+        "location": { "type": "string" },
+        "compDate": { "type": "string" }
+      },
+      "required": ["id", "title", "content"]
+    },
+    "AssociationInfo": {
+      "title": "AssociationInfo",
+      "description": "Official info about KCF",
+      "type": "object",
+      "properties": {
+        "officeName": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "fax": { "type": "string" },
+        "email": { "type": "string" },
+        "permitNumber": { "type": "string" },
+        "businessNumber": { "type": "string" },
+        "representative": { "type": "string" }
+      }
+    },
+    "AdminConfig": {
+      "title": "AdminConfig",
+      "description": "Admin settings and configuration",
+      "type": "object",
+      "properties": {
+        "password": { "type": "string" }
+      }
+    },
+    "DonationRecord": {
+      "title": "DonationRecord",
+      "description": "Annual donation and usage reports for transparency",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "year": { "type": "number" },
+        "donationAmount": { "type": "string" },
+        "usedAmount": { "type": "string" },
+        "usageDetails": { "type": "string" },
+        "status": { "type": "string" },
+        "docUrl": { "type": "string" }
+      },
+      "required": ["id", "year", "donationAmount", "usedAmount", "status"]
+    }
+  },
+  "firestore": {
+    "notices": {
+      "schema": "#/entities/Notice",
+      "description": "Collection of notice board posts"
+    },
+    "teams": {
+      "schema": "#/entities/CheerTeam",
+      "description": "Collection of official registered teams"
+    },
+    "events": {
+      "schema": "#/entities/KCFEvent",
+      "description": "Collection of official schedules and events"
+    },
+    "athletes": {
+      "schema": "#/entities/Athlete",
+      "description": "Collection of registered athletes"
+    },
+    "inquiries": {
+      "schema": "#/entities/InquirySubmission",
+      "description": "Collection of submitted online inquiries"
+    },
+    "competitions": {
+      "schema": "#/entities/CompetitionPost",
+      "description": "Collection of competition post details"
+    },
+    "donations": {
+      "schema": "#/entities/DonationRecord",
+      "description": "Collection of annual donation records"
+    },
+    "settings": {
+      "schema": { "type": "object" },
+      "description": "App configurations like association info, admin config, etc."
+    }
+  }
+}

@@ -1,0 +1,104 @@
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Pretendard", -apple-system, BlinkMacSystemFont, "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-serif: "Outfit", "Plus Jakarta Sans", sans-serif;
+  --font-display: "Outfit", "Plus Jakarta Sans", sans-serif;
+
+  /* Deep Sea Blue colors */
+  --color-blue-50: #f0f4fc;
+  --color-blue-100: #dfe7f8;
+  --color-blue-200: #bfcfef;
+  --color-blue-300: #92afe3;
+  --color-blue-400: #5f8ad2;
+  --color-blue-500: #2e62be;
+  --color-blue-600: #05308c; /* Official Deep Sea Blue */
+  --color-blue-700: #042770;
+  --color-blue-800: #031e56;
+  --color-blue-900: #02143b;
+  --color-blue-950: #0a0a3a; /* Steel Marine */
+
+  /* Lobster Red colors */
+  --color-red-50: #fdf3f3;
+  --color-red-100: #fce4e5;
+  --color-red-200: #f8c0c1;
+  --color-red-300: #f29598;
+  --color-red-400: #e66164;
+  --color-red-500: #d43639;
+  --color-red-600: #ad1f23; /* Official Lobster Red */
+  --color-red-700: #8b1518;
+  --color-red-800: #6c0c0e;
+  --color-red-900: #4b0506;
+
+  /* Custom Names from the brand palette */
+  --color-deep-sea-blue: #05308c;
+  --color-lobster-red: #ad1f23;
+  --color-steel-marine: #0a0a3a;
+  --color-claw-cream: #fefdf8;
+
+  /* Let's map claws-cream and steel-marine to neutral colors to style components naturally */
+  --color-zinc-50: #fefdf8; /* Claw Cream as zinc-50 */
+  --color-zinc-100: #f7f6f0;
+  --color-zinc-200: #ecebe3;
+  --color-zinc-300: #dbdad0;
+  --color-zinc-400: #b4b3a8;
+  --color-zinc-500: #89887c;
+  --color-zinc-600: #65645a;
+  --color-zinc-700: #494941;
+  --color-zinc-800: #30302b;
+  --color-zinc-900: #0a0a3a; /* Steel Marine as zinc-900 */
+  --color-zinc-950: #0a0a3a; /* Steel Marine as zinc-950 */
+
+  /* Map slate also for completeness */
+  --color-slate-50: #fefdf8;
+  --color-slate-100: #f7f6f0;
+  --color-slate-200: #ecebe3;
+  --color-slate-300: #dbdad0;
+  --color-slate-900: #0a0a3a;
+  --color-slate-950: #0a0a3a;
+}
+
+@layer utilities {
+  /* Marquee animation */
+  @keyframes marquee {
+    0% { transform: translateX(0%); }
+    100% { transform: translateX(-50%); }
+  }
+
+  .animate-marquee {
+    display: flex;
+    width: 200%;
+    animation: marquee 30s linear infinite;
+  }
+  
+  .animate-marquee-fast {
+    display: flex;
+    width: 200%;
+    animation: marquee 15s linear infinite;
+  }
+
+  /* Image card hover */
+  .img-card {
+    transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), filter 0.8s ease;
+  }
+
+  /* Hide scrollbar utility */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+}
+
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Plus Jakarta Sans", system-ui, sans-serif;
+  background-color: #fefdf8; /* Claw Cream background */
+  color: #0a0a3a; /* Steel Marine text */
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+
