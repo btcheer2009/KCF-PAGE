@@ -1,10 +1,8 @@
 {
-  "projectId": "remixed-project-id",
-  "appId": "remixed-app-id",
-  "apiKey": "remixed-api-key",
-  "authDomain": "remixed-auth-domain",
-  "firestoreDatabaseId": "remixed-firestore-database-id",
-  "storageBucket": "remixed-storage-bucket",
-  "messagingSenderId": "remixed-messaging-sender-id",
-  "measurementId": "remixed-measurement-id"
+  "apiKey": "AIzaSyCOXFGq4GjOWF3PaScqV-p_Kb9WA0VEmE",
+  "authDomain": "kcf-homepage.firebaseapp.com",
+  "projectId": "kcf-homepage",
+  "storageBucket": "kcf-homepage.firebasestorage.app",
+  "messagingSenderId": "474633245680",
+  "appId": "1:474633245680:web:21802e13bc885217bc8335"
 }
