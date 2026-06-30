@@ -106,6 +106,22 @@ export interface DonationRecord {
   docUrl?: string;
 }
 
+export interface RelatedLink {
+  label: string;
+  url: string;
+  desc?: string;
+}
+
+export interface HomepageContent {
+  heroTitle: string;
+  heroSubtitle: string;
+  heroImageUrl: string;
+  aboutText: string;
+  donationDisclosure: string;
+  relatedLinks: RelatedLink[];
+  updatedAt?: string;
+}
+
 
 
 

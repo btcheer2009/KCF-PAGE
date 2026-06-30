@@ -140,6 +140,32 @@
         "docUrl": { "type": "string" }
       },
       "required": ["id", "year", "donationAmount", "usedAmount", "status"]
+    },
+    "HomepageContent": {
+      "title": "HomepageContent",
+      "description": "Customizable content of the main homepage",
+      "type": "object",
+      "properties": {
+        "heroTitle": { "type": "string" },
+        "heroSubtitle": { "type": "string" },
+        "heroImageUrl": { "type": "string" },
+        "aboutText": { "type": "string" },
+        "donationDisclosure": { "type": "string" },
+        "relatedLinks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": { "type": "string" },
+              "url": { "type": "string" },
+              "desc": { "type": "string" }
+            },
+            "required": ["label", "url"]
+          }
+        },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["heroTitle", "heroSubtitle", "aboutText", "donationDisclosure"]
     }
   },
   "firestore": {
@@ -174,6 +200,10 @@
     "settings": {
       "schema": { "type": "object" },
       "description": "App configurations like association info, admin config, etc."
+    },
+    "site_content": {
+      "schema": "#/entities/HomepageContent",
+      "description": "Collection of customizable website content documents"
     }
   }
 }

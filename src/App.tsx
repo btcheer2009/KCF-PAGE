@@ -9,7 +9,7 @@ import {
   Calendar, MapPin, ArrowUpRight, Menu, X, Trophy, ShieldCheck, Award, 
   Activity, Sparkles, TrendingUp, Heart, Info, ArrowRight, CheckCircle, Flame,
   Database, Settings, Plus, Trash2, Edit, Inbox, Users, User, Megaphone, ShieldAlert, RefreshCw,
-  Image as ImageIcon, Lock, UserCheck, Upload, Type, Building2
+  Image as ImageIcon, Lock, UserCheck, Upload, Type, Building2, Globe, Trash, Save
 } from 'lucide-react';
 
 import NoticeBoard from './components/NoticeBoard';
@@ -20,7 +20,7 @@ import CompetitionBoard from './components/CompetitionBoard';
 import ScheduleCalendar from './components/ScheduleCalendar';
 import DonationDisclosure from './components/DonationDisclosure';
 import { EVENTS, INITIAL_NOTICES, INITIAL_TEAMS, INITIAL_ATHLETES, INITIAL_ASSOCIATION_INFO, INITIAL_COMPETITIONS, INITIAL_DONATION_RECORDS } from './data';
-import { Notice, CheerTeam, InquirySubmission, KCFEvent, Athlete, AssociationInfo, CompetitionPost, DonationRecord } from './types';
+import { Notice, CheerTeam, InquirySubmission, KCFEvent, Athlete, AssociationInfo, CompetitionPost, DonationRecord, HomepageContent, RelatedLink } from './types';
 import { listenCollection, listenDoc, saveItem, deleteItem, saveDoc, seedInitialCollection, seedInitialDoc } from './lib/db';
 
 
@@ -170,6 +170,19 @@ const DEFAULT_CORE_PROMISES = [
     desc: '체계화된 지도자 연수, 국제공인 심판단 교육, 그리고 스턴트 보조법(Spotting) 이수 의무제를 통해 0%의 부상률을 지향하는 고밀도 안전 훈련 인프라를 전파합니다.',
   }
 ];
+
+const DEFAULT_HOMEPAGE_CONTENT: HomepageContent = {
+  heroTitle: "열정으로 비상하는\n대한민국 치어리딩 KCF",
+  heroSubtitle: "사단법인 한국치어리딩협회(KCF)는 선수가 오직 무대와 자신의 꿈에만 전념할 수 있도록 투명한 국가대표 선발전, 안전 중심 기술 규정, 전국 지부 연동 훈련 생태계를 공정하게 구축해 나가고 있습니다.",
+  heroImageUrl: "",
+  aboutText: "사단법인 한국치어리딩협회(KCF)는 선수가 오직 무대와 성장에만 집중할 수 있도록 법률자문, 안전 지도자 연수, 국제 가맹국과의 연대를 통해 보다 건전하고 신뢰받는 치어리딩 스포츠 문화 안착에 앞장섭니다.",
+  donationDisclosure: "사단법인 한국치어리딩협회는 국세청 지정 기부금 단체로서 회원과 후원자분들의 소중한 기부금을 투명하고 공정하게 관리합니다. 관련 법령에 따라 연간 기부금 모금액과 사용 내역을 투명하게 공시합니다.",
+  relatedLinks: [
+    { label: "국세청", url: "https://www.nts.go.kr", desc: "국세행정 및 세무 관련 공식 정보 제공" },
+    { label: "국민권익위원회", url: "https://www.acrc.go.kr", desc: "청렴·부패방지 및 국민권익 보호" }
+  ],
+  updatedAt: "2026-06-30T09:00:00Z"
+};
 
 export default function App() {
   const saveTimersRef = React.useRef<{ [key: string]: any }>({});
@@ -446,6 +459,16 @@ export default function App() {
     });
   };
 
+  const setHomepageContent = (action: React.SetStateAction<HomepageContent>) => {
+    rawSetHomepageContent((prev) => {
+      const next = typeof action === 'function' ? (action as any)(prev) : action;
+      setTimeout(() => {
+        debouncedSaveDoc('site_content', 'homepage', next, 800);
+      }, 0);
+      return next;
+    });
+  };
+
   const setAdminPassword = (action: React.SetStateAction<string>) => {
     rawSetAdminPassword((prev) => {
       const next = typeof action === 'function' ? (action as any)(prev) : action;
@@ -547,6 +570,9 @@ export default function App() {
   // Core three promises state (editable by manager)
   const [corePromises, rawSetCorePromises] = useState<typeof DEFAULT_CORE_PROMISES>(DEFAULT_CORE_PROMISES);
  
+  // Homepage content state (editable by manager)
+  const [homepageContent, rawSetHomepageContent] = useState<HomepageContent>(DEFAULT_HOMEPAGE_CONTENT);
+
   // Admin Notice Form states
   const [showAddNoticeForm, setShowAddNoticeForm] = useState(false);
   const [adminEditingNotice, setAdminEditingNotice] = useState<Notice | null>(null);
@@ -566,7 +592,7 @@ export default function App() {
   // Admin Panel states
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [showAdminDashboardModal, setShowAdminDashboardModal] = useState(false);
-  const [adminActiveTab, setAdminActiveTab] = useState<'stats' | 'notices' | 'teams' | 'inquiries' | 'schedules' | 'images' | 'athletes' | 'association' | 'competitions' | 'headers' | 'donations'>('stats');
+  const [adminActiveTab, setAdminActiveTab] = useState<'stats' | 'notices' | 'teams' | 'inquiries' | 'schedules' | 'images' | 'athletes' | 'association' | 'competitions' | 'headers' | 'donations' | 'homepage'>('stats');
   const [inquiryFilter, setInquiryFilter] = useState<'all' | 'contact' | 'team_reg'>('all');
 
   const adminActiveTabRef = React.useRef(adminActiveTab);
@@ -677,6 +703,17 @@ export default function App() {
   const [newCatId, setNewCatId] = useState('');
   const [newCatLabel, setNewCatLabel] = useState('');
   const [adminEditingComp, setAdminEditingComp] = useState<CompetitionPost | null>(null);
+
+  // Admin Homepage Content Form states
+  const [homeHeroTitle, setHomeHeroTitle] = useState(DEFAULT_HOMEPAGE_CONTENT.heroTitle);
+  const [homeHeroSubtitle, setHomeHeroSubtitle] = useState(DEFAULT_HOMEPAGE_CONTENT.heroSubtitle);
+  const [homeHeroImageUrl, setHomeHeroImageUrl] = useState(DEFAULT_HOMEPAGE_CONTENT.heroImageUrl);
+  const [homeAboutText, setHomeAboutText] = useState(DEFAULT_HOMEPAGE_CONTENT.aboutText);
+  const [homeDonationDisclosure, setHomeDonationDisclosure] = useState(DEFAULT_HOMEPAGE_CONTENT.donationDisclosure);
+  const [homeRelatedLinks, setHomeRelatedLinks] = useState<RelatedLink[]>(DEFAULT_HOMEPAGE_CONTENT.relatedLinks);
+  const [newLinkName, setNewLinkName] = useState('');
+  const [newLinkUrl, setNewLinkUrl] = useState('');
+  const [newLinkDesc, setNewLinkDesc] = useState('');
   const [showAddCompForm, setShowAddCompForm] = useState(false);
   const [newCompTitle, setNewCompTitle] = useState('');
   const [newCompCategory, setNewCompCategory] = useState<'domestic' | 'international'>('domestic');
@@ -798,6 +835,7 @@ export default function App() {
         seedInitialDoc<typeof DEFAULT_CATEGORY_HEADERS>('settings', 'category_headers', DEFAULT_CATEGORY_HEADERS),
         seedInitialDoc<{ list: typeof DEFAULT_CORE_PROMISES }>('settings', 'core_promises', { list: DEFAULT_CORE_PROMISES }),
         seedInitialDoc<AssociationInfo>('settings', 'association_info', INITIAL_ASSOCIATION_INFO),
+        seedInitialDoc<HomepageContent>('site_content', 'homepage', DEFAULT_HOMEPAGE_CONTENT),
         seedInitialDoc<{ password: string }>('settings', 'admin_config', { password: 'bt2009' }),
         seedInitialDoc<{ list: { id: string; label: string }[] }>('settings', 'team_categories', { list: [
           { id: 'allstar', label: '올스타 치어 (Allstar)' },
@@ -928,6 +966,19 @@ export default function App() {
       }
     });
 
+    // 9.5 Homepage Content
+    const unsubscribeHomepageContent = listenDoc<HomepageContent>('site_content', 'homepage', (data) => {
+      if (data) {
+        rawSetHomepageContent(data);
+        setHomeHeroTitle(data.heroTitle || '');
+        setHomeHeroSubtitle(data.heroSubtitle || '');
+        setHomeHeroImageUrl(data.heroImageUrl || '');
+        setHomeAboutText(data.aboutText || '');
+        setHomeDonationDisclosure(data.donationDisclosure || '');
+        setHomeRelatedLinks(data.relatedLinks || []);
+      }
+    });
+
     // 10. Association Info
     const unsubscribeAssoc = listenDoc<AssociationInfo>('settings', 'association_info', (data) => {
       if (data) {
@@ -992,6 +1043,7 @@ export default function App() {
       unsubscribeIndividualImages.forEach((unsub) => unsub());
       unsubscribeHeaders();
       unsubscribePromises();
+      unsubscribeHomepageContent();
       unsubscribeAssoc();
       unsubscribePassword();
       unsubscribeTeamCategories();
@@ -1282,6 +1334,44 @@ export default function App() {
     };
     reader.onerror = () => {
       showToast('이미지 저장에 실패했습니다. 파일을 읽는 중 오류가 발생했습니다.', 'error');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleHeroImageUpload = async (file: File) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+    const fileType = file.type.toLowerCase();
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    
+    if (!allowedTypes.includes(fileType) && !['jpg', 'png', 'webp', 'jpeg'].includes(fileExtension || '')) {
+      showToast('이미지 업로드 실패: 지원하지 않는 형식입니다. (JPG, PNG, WEBP만 가능)', 'error');
+      return;
+    }
+
+    if (file.size > 15 * 1024 * 1024) {
+      showToast('이미지 업로드 실패: 최대 15MB 이하만 업로드 가능합니다.', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      if (event.target?.result && typeof event.target.result === 'string') {
+        try {
+          const isValid = await validateImageDataURL(event.target.result);
+          if (!isValid) {
+            showToast('이미지 업로드 실패: 유효하지 않은 이미지 파일입니다.', 'error');
+            return;
+          }
+
+          showToast('히어로 이미지 압축 중...', 'info');
+          const compressed = await resizeAndCompressImage(event.target.result, file);
+          setHomeHeroImageUrl(compressed);
+          showToast('임시 미리보기가 설정되었습니다. [홈페이지 설정 저장하기] 버튼을 누르면 최종 저장됩니다.', 'success');
+        } catch (err) {
+          console.error("Hero image compression failed:", err);
+          showToast('이미지 최적화에 실패했습니다.', 'error');
+        }
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -1638,7 +1728,7 @@ export default function App() {
               <header id="hero" className="relative min-h-screen pt-36 md:pt-28 flex flex-col justify-between px-6 lg:px-16 pb-12 overflow-hidden bg-zinc-50/35">
                 {/* Background Gradients & Overlay */}
                 <div className="absolute inset-0 z-0 bg-gradient-to-r from-blue-500/5 via-transparent to-red-500/5"></div>
-                <div className="absolute inset-0 z-0 opacity-[0.06] mix-blend-overlay bg-cover bg-center" style={{ backgroundImage: `url('${siteImages.heroBg}')` }}></div>
+                <div className="absolute inset-0 z-0 opacity-[0.06] mix-blend-overlay bg-cover bg-center" style={{ backgroundImage: `url('${homepageContent.heroImageUrl || siteImages.heroBg}')` }}></div>
                 
                 {/* Decorative blue & red subtle circles */}
                 <div className="absolute top-1/4 -left-20 w-96 h-96 bg-blue-600/5 rounded-full blur-3xl pointer-events-none"></div>
@@ -1654,13 +1744,12 @@ export default function App() {
                         transition={{ duration: 0.8 }}
                         className="space-y-6"
                       >
-                        <h1 className="text-4xl md:text-5xl lg:text-7.5xl font-serif font-black leading-[1.08] tracking-tighter text-zinc-950 uppercase">
-                          열정으로 비상하는 <br />
-                          대한민국 <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 font-black">치어리딩</span> <span className="text-red-500 italic font-black">KCF</span>
+                        <h1 className="text-4xl md:text-5xl lg:text-7.5xl font-serif font-black leading-[1.08] tracking-tighter text-zinc-950 uppercase whitespace-pre-line">
+                          {homepageContent.heroTitle || "열정으로 비상하는\n대한민국 치어리딩 KCF"}
                         </h1>
                         
-                        <p className="text-sm md:text-base text-zinc-500 font-normal max-w-2xl leading-relaxed">
-                          사단법인 한국치어리딩협회(KCF)는 선수가 오직 무대와 자신의 꿈에만 전념할 수 있도록 투명한 국가대표 선발전, 안전 중심 기술 규정, 전국 지부 연동 훈련 생태계를 공정하게 구축해 나가고 있습니다.
+                        <p className="text-sm md:text-base text-zinc-500 font-normal max-w-2xl leading-relaxed whitespace-pre-line">
+                          {homepageContent.heroSubtitle || "사단법인 한국치어리딩협회(KCF)는 선수가 오직 무대와 자신의 꿈에만 전념할 수 있도록 투명한 국가대표 선발전, 안전 중심 기술 규정, 전국 지부 연동 훈련 생태계를 공정하게 구축해 나가고 있습니다."}
                         </p>
 
                         <div className="flex flex-wrap gap-3.5 pt-2">
@@ -1687,47 +1776,31 @@ export default function App() {
                     {/* Public Agency Banners Section: Right on PC, bottom on mobile */}
                     <div className="lg:col-span-5 order-2 lg:order-2 w-full">
                       <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-4">
-                        {/* 국세청 배너 */}
-                        <a 
-                          href="https://www.nts.go.kr" 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="group flex items-center gap-4.5 p-4.5 rounded-2xl bg-white border border-blue-100/80 hover:border-[#005BAC] hover:-translate-y-1.5 hover:shadow-[0_12px_24px_-10px_rgba(0,91,172,0.15)] transition-all duration-300 min-h-[84px] cursor-pointer"
-                        >
-                          <div className="w-12 h-12 rounded-xl bg-blue-50/70 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                            <Building2 className="w-6 h-6 text-[#005BAC]" />
-                          </div>
-                          <div className="text-left">
-                            <h4 className="text-xs sm:text-sm font-extrabold text-zinc-950 flex items-center gap-1 group-hover:text-[#005BAC] transition-colors">
-                              국세청
-                              <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-all" />
-                            </h4>
-                            <p className="text-[10px] sm:text-xs text-zinc-500 mt-1 font-medium leading-tight">
-                              국세행정 및 세무 관련 공식 정보 제공
-                            </p>
-                          </div>
-                        </a>
-
-                        {/* 국민권익위원회 배너 */}
-                        <a 
-                          href="https://www.acrc.go.kr" 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="group flex items-center gap-4.5 p-4.5 rounded-2xl bg-white border border-orange-100/80 hover:border-[#F58220] hover:-translate-y-1.5 hover:shadow-[0_12px_24px_-10px_rgba(245,130,32,0.15)] transition-all duration-300 min-h-[84px] cursor-pointer"
-                        >
-                          <div className="w-12 h-12 rounded-xl bg-orange-50/70 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                            <ShieldCheck className="w-6 h-6 text-[#F58220]" />
-                          </div>
-                          <div className="text-left">
-                            <h4 className="text-xs sm:text-sm font-extrabold text-zinc-950 flex items-center gap-1 group-hover:text-[#F58220] transition-colors">
-                              국민권익위원회
-                              <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-all" />
-                            </h4>
-                            <p className="text-[10px] sm:text-xs text-zinc-500 mt-1 font-medium leading-tight">
-                              청렴·부패방지 및 국민권익 보호
-                            </p>
-                          </div>
-                        </a>
+                        {/* Dynamic Related Links */}
+                        {(homepageContent.relatedLinks || []).map((link, idx) => (
+                          <a 
+                            key={idx}
+                            href={link.url} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="group flex items-center gap-4.5 p-4.5 rounded-2xl bg-white border border-zinc-200/80 hover:border-blue-500 hover:-translate-y-1.5 hover:shadow-md transition-all duration-300 min-h-[84px] cursor-pointer"
+                          >
+                            <div className="w-12 h-12 rounded-xl bg-blue-50/70 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                              <Building2 className="w-6 h-6 text-blue-600" />
+                            </div>
+                            <div className="text-left">
+                              <h4 className="text-xs sm:text-sm font-extrabold text-zinc-950 flex items-center gap-1 group-hover:text-blue-600 transition-colors">
+                                {link.label}
+                                <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-all text-blue-500" />
+                              </h4>
+                              {link.desc && (
+                                <p className="text-[10px] sm:text-xs text-zinc-500 mt-1 font-medium leading-tight">
+                                  {link.desc}
+                                </p>
+                              )}
+                            </div>
+                          </a>
+                        ))}
 
                         {/* 기부금 투명성 공개 안내 배너 */}
                         <button 
@@ -1810,8 +1883,8 @@ export default function App() {
                   <div className="lg:col-span-9 space-y-6">
                     <h2 className="text-3xl md:text-5xl font-serif leading-[1.12] text-zinc-950 font-black tracking-tight max-w-4xl uppercase">
                       선수를 위해, <br />치어리딩의 내일을 위해.
-                      <span className="font-sans text-sm md:text-base block mt-6 text-zinc-500 leading-relaxed font-normal normal-case">
-                        사단법인 한국치어리딩협회(KCF)는 선수가 오직 무대와 성장에만 집중할 수 있도록 법률자문, 안전 지도자 연수, 국제 가맹국과의 연대를 통해 보다 건전하고 신뢰받는 치어리딩 스포츠 문화 안착에 앞장섭니다.
+                      <span className="font-sans text-sm md:text-base block mt-6 text-zinc-500 leading-relaxed font-normal normal-case whitespace-pre-line">
+                        {homepageContent.aboutText || "사단법인 한국치어리딩협회(KCF)는 선수가 오직 무대와 성장에만 집중할 수 있도록 법률자문, 안전 지도자 연수, 국제 가맹국과의 연대를 통해 보다 건전하고 신뢰받는 치어리딩 스포츠 문화 안착에 앞장섭니다."}
                       </span>
                     </h2>
                     
@@ -2215,7 +2288,7 @@ export default function App() {
                   donations={donations}
                   headerBadge={categoryHeaders.donations?.badge}
                   headerTitle={categoryHeaders.donations?.title}
-                  headerDesc={categoryHeaders.donations?.desc}
+                  headerDesc={homepageContent.donationDisclosure || categoryHeaders.donations?.desc}
                 />
               </section>
             </motion.div>
@@ -2455,6 +2528,7 @@ export default function App() {
                       { id: 'competitions', label: '대회 정보 관리', icon: Trophy },
                       { id: 'donations', label: '기부금 관리', icon: Heart },
                       { id: 'headers', label: '안내문구 & 핵심약속', icon: Type },
+                      { id: 'homepage', label: '홈페이지 관리', icon: Globe },
                       { id: 'association', label: '협회 정보 관리', icon: Settings },
                     ].map(tab => {
                       const Icon = tab.icon;
@@ -5792,6 +5866,311 @@ export default function App() {
                         <Activity className="w-4 h-4 text-white" />
                         제어센터 메인메뉴(종합 요약)로 돌아가기
                       </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* 10.5. Homepage Content Management Panel */}
+                {adminActiveTab === 'homepage' && (
+                  <div className="space-y-6">
+                    {/* 상단 퀵 이동 및 돌아가기 버튼 */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                        <span className="text-[11px] font-bold text-indigo-900">홈페이지 메인 콘텐츠 & 공식 관련기관 배너 편집 중</span>
+                      </div>
+                      <button
+                        onClick={() => setAdminActiveTab('stats')}
+                        className="text-[11px] font-black text-indigo-600 hover:text-indigo-800 bg-white hover:bg-indigo-50 border border-indigo-200 shadow-2xs px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Activity className="w-3.5 h-3.5 text-indigo-600" />
+                        ← 제어센터 메인메뉴(종합 요약)로 돌아가기
+                      </button>
+                    </div>
+
+                    <div className="bg-white border border-zinc-200/80 rounded-2xl p-6 space-y-6">
+                      <div className="border-b border-zinc-100 pb-4">
+                        <h3 className="text-sm font-black text-zinc-950 flex items-center gap-2">
+                          <Globe className="w-4 h-4 text-indigo-600" />
+                          메인 히어로(Hero) 영역 커스텀 설정
+                        </h3>
+                        <p className="text-[10px] text-zinc-400 mt-1">홈페이지 첫 화면의 비주얼 이미지, 대표 타이틀, 소개 서브타이틀 문구를 커스터마이징합니다.</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-black text-zinc-700 block">메인 타이틀 (Hero Title)</label>
+                          <textarea
+                            rows={3}
+                            value={homeHeroTitle}
+                            onChange={(e) => setHomeHeroTitle(e.target.value)}
+                            placeholder="예: 열정으로 비상하는&#13;대한민국 치어리딩 KCF"
+                            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-xs text-zinc-800 focus:outline-none focus:bg-white focus:border-zinc-900 font-medium"
+                          />
+                          <p className="text-[9px] text-zinc-400 font-light leading-snug">줄바꿈이 필요한 위치에 그대로 엔터(Enter)를 입력하시면 줄바꿈이 반영됩니다.</p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-black text-zinc-700 block">메인 서브타이틀 (Hero Subtitle)</label>
+                          <textarea
+                            rows={3}
+                            value={homeHeroSubtitle}
+                            onChange={(e) => setHomeHeroSubtitle(e.target.value)}
+                            placeholder="대표 서브 타이틀 문구를 입력해 주세요."
+                            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-xs text-zinc-800 focus:outline-none focus:bg-white focus:border-zinc-900 font-light leading-relaxed"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 pt-2">
+                        <label className="text-[11px] font-black text-zinc-700 block">메인 히어로 배경 이미지 (Hero Background Image)</label>
+                        <div className="flex flex-col sm:flex-row gap-3.5 items-start sm:items-center">
+                          {/* Current Preview */}
+                          <div className="w-24 h-16 rounded-xl bg-zinc-100 border border-zinc-200/60 overflow-hidden shrink-0 relative flex items-center justify-center">
+                            {homeHeroImageUrl || siteImages.heroBg ? (
+                              <img 
+                                src={homeHeroImageUrl || siteImages.heroBg} 
+                                alt="히어로 배경 미리보기" 
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <ImageIcon className="w-5 h-5 text-zinc-400" />
+                            )}
+                          </div>
+                          
+                          <div className="flex-1 w-full space-y-1.5">
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={homeHeroImageUrl}
+                                onChange={(e) => setHomeHeroImageUrl(e.target.value)}
+                                placeholder="https://... 또는 업로드된 데이터 URL"
+                                className="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-[11px] text-zinc-800 focus:outline-none focus:border-zinc-900 font-mono"
+                              />
+                              <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                id="file-upload-hero"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    handleHeroImageUpload(file);
+                                  }
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => document.getElementById('file-upload-hero')?.click()}
+                                className="bg-zinc-900 hover:bg-zinc-800 text-white px-4 py-2 rounded-xl text-xs font-semibold transition shrink-0 cursor-pointer flex items-center gap-1.5"
+                              >
+                                <Upload className="w-3.5 h-3.5" />
+                                이미지 업로드
+                              </button>
+                            </div>
+                            <p className="text-[9px] text-zinc-400">직접 외부 이미지 URL을 입력하거나, [이미지 업로드] 버튼을 눌러 내 PC의 고품질 이미지 파일을 압축 최적화하여 등록할 수 있습니다.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white border border-zinc-200/80 rounded-2xl p-6 space-y-5">
+                      <div className="border-b border-zinc-100 pb-4">
+                        <h3 className="text-sm font-black text-zinc-950 flex items-center gap-2">
+                          <Info className="w-4 h-4 text-indigo-600" />
+                          협회 소개 및 기부금 공지문구 설정
+                        </h3>
+                        <p className="text-[10px] text-zinc-400 mt-1">홈페이지 중하단 협회 약속(About KCF) 하위 본문 및 기부금 탭의 최상단 안내문구를 편집합니다.</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-black text-zinc-700 block">협회 소개 상세 본문 (About KCF Body)</label>
+                          <textarea
+                            rows={5}
+                            value={homeAboutText}
+                            onChange={(e) => setHomeAboutText(e.target.value)}
+                            placeholder="협회 소개 본문을 적어주세요."
+                            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-xs text-zinc-800 focus:outline-none focus:bg-white focus:border-zinc-900 font-light leading-relaxed"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-black text-zinc-700 block">기부금 공개 최상단 안내 문구 (Donation Disclosure)</label>
+                          <textarea
+                            rows={5}
+                            value={homeDonationDisclosure}
+                            onChange={(e) => setHomeDonationDisclosure(e.target.value)}
+                            placeholder="기부금 공개 탭 상단에 상시 표출될 안내문구를 적어주세요."
+                            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-xs text-zinc-800 focus:outline-none focus:bg-white focus:border-zinc-900 font-light leading-relaxed"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white border border-zinc-200/80 rounded-2xl p-6 space-y-5">
+                      <div className="border-b border-zinc-100 pb-4">
+                        <h3 className="text-sm font-black text-zinc-950 flex items-center gap-2">
+                          <Building2 className="w-4 h-4 text-indigo-600" />
+                          공식 관련 기관 배너 및 링크 설정
+                        </h3>
+                        <p className="text-[10px] text-zinc-400 mt-1">홈페이지 우측(모바일은 하단)에 고정되는 공공기관/패밀리 사이트 배너들을 관리합니다.</p>
+                      </div>
+
+                      {/* Current Related Links List */}
+                      <div className="space-y-2.5">
+                        <label className="text-[11px] font-black text-zinc-700 block">현재 등록된 관련 기관 목록 ({homeRelatedLinks.length}개)</label>
+                        {homeRelatedLinks.length === 0 ? (
+                          <div className="text-center py-6 border border-dashed border-zinc-200 rounded-2xl text-xs text-zinc-400">
+                            등록된 공식 배너 링크가 없습니다. 아래 추가 폼을 사용하여 등록하세요.
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {homeRelatedLinks.map((link, idx) => (
+                              <div key={idx} className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-200 bg-zinc-50/50 hover:bg-white transition">
+                                <div className="space-y-1 min-w-0 pr-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[11px] font-extrabold text-zinc-900 truncate">{link.label}</span>
+                                    <span className="text-[8px] font-mono text-zinc-400 bg-zinc-100 px-1 py-0.5 rounded truncate max-w-[150px]">{link.url}</span>
+                                  </div>
+                                  {link.desc && <p className="text-[10px] text-zinc-500 font-light truncate">{link.desc}</p>}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = homeRelatedLinks.filter((_, i) => i !== idx);
+                                    setHomeRelatedLinks(updated);
+                                    showToast('관련 링크가 대기 목록에서 제외되었습니다. 최종 저장을 완료하려면 저장하기 버튼을 누르세요.', 'info');
+                                  }}
+                                  className="text-red-500 hover:text-red-700 p-1.5 hover:bg-red-50 rounded-lg transition cursor-pointer shrink-0"
+                                  title="제외하기"
+                                >
+                                  <Trash className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Add Sub-form */}
+                      <div className="bg-zinc-50/50 border border-zinc-100 rounded-2xl p-4.5 space-y-4">
+                        <div className="text-[11px] font-extrabold text-zinc-950 flex items-center gap-1.5">
+                          <span className="w-1 h-3.5 bg-indigo-500 rounded-full inline-block"></span>
+                          새로운 관련 기관 배너 대기열에 추가하기
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-zinc-600 block">기관/사이트 이름</label>
+                            <input
+                              type="text"
+                              value={newLinkName}
+                              onChange={(e) => setNewLinkName(e.target.value)}
+                              placeholder="예: 국세청"
+                              className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-900"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-zinc-600 block">사이트 URL 주소</label>
+                            <input
+                              type="text"
+                              value={newLinkUrl}
+                              onChange={(e) => setNewLinkUrl(e.target.value)}
+                              placeholder="예: https://www.nts.go.kr"
+                              className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-900 font-mono"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-zinc-600 block">배너 하단 짧은 정보/설명</label>
+                          <input
+                            type="text"
+                            value={newLinkDesc}
+                            onChange={(e) => setNewLinkDesc(e.target.value)}
+                            placeholder="예: 국세행정 및 세무 관련 공식 정보 제공"
+                            className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-900"
+                          />
+                        </div>
+
+                        <div className="flex justify-end pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!newLinkName.trim()) {
+                                showToast('기관 이름을 입력하세요.', 'error');
+                                return;
+                              }
+                              if (!newLinkUrl.trim() || !newLinkUrl.startsWith('http')) {
+                                showToast('올바른 URL(http:// 또는 https://로 시작)을 입력하세요.', 'error');
+                                return;
+                              }
+                              const item: RelatedLink = {
+                                label: newLinkName.trim(),
+                                url: newLinkUrl.trim(),
+                                desc: newLinkDesc.trim() || undefined
+                              };
+                              setHomeRelatedLinks((prev) => [...prev, item]);
+                              setNewLinkName('');
+                              setNewLinkUrl('');
+                              setNewLinkDesc('');
+                              showToast('배너 링크 목록에 추가되었습니다. 하단의 [홈페이지 설정 저장하기] 버튼을 클릭해 영구 반영하세요.', 'success');
+                            }}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] px-4.5 py-2.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            목록 대기열에 추가
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bottom Action Section */}
+                    <div className="border-t border-zinc-200 pt-6 mt-4 flex flex-col sm:flex-row gap-4 items-center justify-between">
+                      <p className="text-[10px] text-zinc-400">수정 사항은 [저장하기] 버튼을 눌러야 모든 기기 및 새 창에 실시간으로 최종 반영됩니다.</p>
+                      <div className="flex w-full sm:w-auto gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHomeHeroTitle(homepageContent.heroTitle || '');
+                            setHomeHeroSubtitle(homepageContent.heroSubtitle || '');
+                            setHomeHeroImageUrl(homepageContent.heroImageUrl || '');
+                            setHomeAboutText(homepageContent.aboutText || '');
+                            setHomeDonationDisclosure(homepageContent.donationDisclosure || '');
+                            setHomeRelatedLinks(homepageContent.relatedLinks || []);
+                            showToast('마지막으로 저장된 상태로 되돌렸습니다.', 'info');
+                          }}
+                          className="bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold text-xs px-5 py-3 rounded-xl transition cursor-pointer"
+                        >
+                          수정 취소 (원래대로)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              showToast('홈페이지 설정을 저장하는 중...', 'info');
+                              const payload: HomepageContent = {
+                                heroTitle: homeHeroTitle.trim(),
+                                heroSubtitle: homeHeroSubtitle.trim(),
+                                heroImageUrl: homeHeroImageUrl.trim(),
+                                aboutText: homeAboutText.trim(),
+                                donationDisclosure: homeDonationDisclosure.trim(),
+                                relatedLinks: homeRelatedLinks
+                              };
+                              await setHomepageContent(payload);
+                              showToast('홈페이지 설정이 성공적으로 저장 및 배포되었습니다!', 'success');
+                            } catch (error: any) {
+                              console.error("Save failed:", error);
+                              showToast(`홈페이지 설정 저장 실패 (사유: ${error.message || error})`, 'error');
+                            }
+                          }}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-6 py-3 rounded-xl transition flex items-center gap-2 shadow-xs cursor-pointer flex-1 sm:flex-none justify-center"
+                        >
+                          <Save className="w-4 h-4" />
+                          홈페이지 설정 저장하기
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
