@@ -92,6 +92,27 @@
     -ms-overflow-style: none;  /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
   }
+
+  /* Custom subtle scrollbar */
+  .custom-admin-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-admin-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-admin-scrollbar::-webkit-scrollbar-thumb {
+    background: #dbdad0;
+    border-radius: 9999px;
+    border: 1px solid transparent;
+  }
+  .custom-admin-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #b4b3a8;
+  }
+  .custom-admin-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #dbdad0 transparent;
+  }
 }
 
 body {

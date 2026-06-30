@@ -9,7 +9,7 @@ import {
   Calendar, MapPin, ArrowUpRight, Menu, X, Trophy, ShieldCheck, Award, 
   Activity, Sparkles, TrendingUp, Heart, Info, ArrowRight, CheckCircle, Flame,
   Database, Settings, Plus, Trash2, Edit, Inbox, Users, User, Megaphone, ShieldAlert, RefreshCw,
-  Image, Lock, UserCheck, Upload, Type, Building2
+  Image as ImageIcon, Lock, UserCheck, Upload, Type, Building2
 } from 'lucide-react';
 
 import NoticeBoard from './components/NoticeBoard';
@@ -24,6 +24,55 @@ import { Notice, CheerTeam, InquirySubmission, KCFEvent, Athlete, AssociationInf
 import { listenCollection, listenDoc, saveItem, deleteItem, saveDoc, seedInitialCollection, seedInitialDoc } from './lib/db';
 
 
+// IndexedDB utility for high-capacity persistent local storage of images (base64)
+const DB_NAME = 'kcf_images_db';
+const STORE_NAME = 'images_store';
+
+const openImageDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+};
+
+const saveImageToIndexedDB = async (key: string, dataUrl: string): Promise<void> => {
+  try {
+    const db = await openImageDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    store.put(dataUrl, key);
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.error('Failed to save image to IndexedDB:', err);
+  }
+};
+
+const loadImageFromIndexedDB = async (key: string): Promise<string | null> => {
+  try {
+    const db = await openImageDB();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const request = store.get(key);
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error);
+    });
+  } catch (err) {
+    console.error('Failed to load image from IndexedDB:', err);
+    return null;
+  }
+};
+
 const DEFAULT_IMAGES = {
   heroBg: 'https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&q=80&w=1200',
   badgeImg: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&q=80&w=400',
@@ -32,6 +81,38 @@ const DEFAULT_IMAGES = {
   mosaic3: 'https://images.unsplash.com/photo-1508847154043-be12a26c86c5?auto=format&fit=crop&q=80&w=500',
   icuLogo: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=120',
   associationLogo: '',
+};
+
+const getInitialSiteImages = (): typeof DEFAULT_IMAGES => {
+  try {
+    const saved = localStorage.getItem('kcf_site_images');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      const clean: any = {};
+      for (const k of Object.keys(DEFAULT_IMAGES)) {
+        // Only load if it exists and is not a massive base64 string
+        if (parsed[k] && !parsed[k].startsWith('data:')) {
+          clean[k] = parsed[k];
+        }
+      }
+      return { ...DEFAULT_IMAGES, ...clean };
+    }
+  } catch (e) {
+    console.error("Failed to load site images from localStorage:", e);
+  }
+  return DEFAULT_IMAGES;
+};
+
+const getInitialAssociationInfo = (): AssociationInfo => {
+  try {
+    const saved = localStorage.getItem('kcf_association_info');
+    if (saved) {
+      return { ...INITIAL_ASSOCIATION_INFO, ...JSON.parse(saved) };
+    }
+  } catch (e) {
+    console.error("Failed to load association info from localStorage:", e);
+  }
+  return INITIAL_ASSOCIATION_INFO;
 };
 
 const DEFAULT_CATEGORY_HEADERS = {
@@ -110,7 +191,7 @@ export default function App() {
 
   const compressImage = (base64Str: string, maxWidth = 1000, maxHeight = 1000, quality = 0.75): Promise<string> => {
     return new Promise((resolve) => {
-      const img = new Image();
+      const img = new window.Image();
       img.src = base64Str;
       img.onload = () => {
         let width = img.width;
@@ -145,6 +226,42 @@ export default function App() {
     });
   };
 
+  const resizeAndCompressImage = async (base64Str: string, file: File): Promise<string> => {
+    let maxDim = 1200;
+    let quality = 0.75;
+    
+    if (file.size > 8 * 1024 * 1024) { // > 8MB
+      maxDim = 800;
+      quality = 0.6;
+    } else if (file.size > 3 * 1024 * 1024) { // > 3MB
+      maxDim = 1000;
+      quality = 0.7;
+    }
+
+    let result = await compressImage(base64Str, maxDim, maxDim, quality);
+    let resultSize = (result.length * 3) / 4;
+    
+    if (resultSize > 600 * 1024) {
+      result = await compressImage(base64Str, 800, 800, 0.65);
+      resultSize = (result.length * 3) / 4;
+    }
+    
+    if (resultSize > 900 * 1024) {
+      result = await compressImage(base64Str, 600, 600, 0.5);
+    }
+    
+    return result;
+  };
+
+  const validateImageDataURL = (dataUrl: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      const img = new window.Image();
+      img.onload = () => resolve(true);
+      img.onerror = () => resolve(false);
+      img.src = dataUrl;
+    });
+  };
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [eventFilter, setEventFilter] = useState<string>('all');
@@ -170,7 +287,7 @@ export default function App() {
   ]);
   const [teamRegions, rawSetTeamRegions] = useState<string[]>(['서울', '경기', '부산', '대구', '강원', '인천', '충청', '전라']);
   const [athletes, rawSetAthletes] = useState<Athlete[]>([]);
-  const [associationInfo, rawSetAssociationInfo] = useState<AssociationInfo>(INITIAL_ASSOCIATION_INFO);
+  const [associationInfo, rawSetAssociationInfo] = useState<AssociationInfo>(getInitialAssociationInfo);
   const [competitions, rawSetCompetitions] = useState<CompetitionPost[]>([]);
   const [donations, rawSetDonations] = useState<DonationRecord[]>([]);
 
@@ -277,9 +394,34 @@ export default function App() {
   const setSiteImages = (action: React.SetStateAction<typeof DEFAULT_IMAGES>) => {
     rawSetSiteImages((prev) => {
       const next = typeof action === 'function' ? (action as any)(prev) : action;
-      setTimeout(() => {
-        debouncedSaveDoc('settings', 'site_images', next, 800);
-      }, 0);
+      
+      // Save only small, non-base64 images to localStorage to prevent quota limit errors
+      try {
+        const cleanLocal: any = {};
+        for (const k of Object.keys(next)) {
+          const val = (next as any)[k];
+          if (val && !val.startsWith('data:')) {
+            cleanLocal[k] = val;
+          }
+        }
+        localStorage.setItem('kcf_site_images', JSON.stringify(cleanLocal));
+      } catch (e) {
+        console.error("Failed to save site images to localStorage:", e);
+      }
+
+      // Check which keys changed and save them individually to Firestore & IndexedDB
+      for (const key of Object.keys(next) as Array<keyof typeof DEFAULT_IMAGES>) {
+        if (next[key] !== prev[key]) {
+          const val = next[key];
+          if (val) {
+            if (val.startsWith('data:')) {
+              saveImageToIndexedDB(key, val);
+            }
+            debouncedSaveDoc('settings', `site_image_${key}`, { url: val }, 800);
+          }
+        }
+      }
+
       return next;
     });
   };
@@ -347,6 +489,11 @@ export default function App() {
   const setAssociationInfo = (action: React.SetStateAction<AssociationInfo>) => {
     rawSetAssociationInfo((prev) => {
       const next = typeof action === 'function' ? (action as any)(prev) : action;
+      try {
+        localStorage.setItem('kcf_association_info', JSON.stringify(next));
+      } catch (e) {
+        console.error("Failed to save association info to localStorage:", e);
+      }
       setTimeout(() => {
         debouncedSaveDoc('settings', 'association_info', next, 800);
       }, 0);
@@ -363,7 +510,7 @@ export default function App() {
   };
   
   // Site dynamic images
-  const [siteImages, rawSetSiteImages] = useState<typeof DEFAULT_IMAGES>(DEFAULT_IMAGES);
+  const [siteImages, rawSetSiteImages] = useState<typeof DEFAULT_IMAGES>(getInitialSiteImages);
   const [headerLogoFailed, setHeaderLogoFailed] = useState(false);
   const [footerLogoFailed, setFooterLogoFailed] = useState(false);
 
@@ -371,6 +518,28 @@ export default function App() {
     setHeaderLogoFailed(false);
     setFooterLogoFailed(false);
   }, [siteImages.associationLogo]);
+
+  // Load site images from IndexedDB asynchronously on mount to prevent default images from overwriting saved ones
+  useEffect(() => {
+    const loadCachedImages = async () => {
+      try {
+        const keys = Object.keys(DEFAULT_IMAGES) as Array<keyof typeof DEFAULT_IMAGES>;
+        const cached: Partial<typeof DEFAULT_IMAGES> = {};
+        for (const key of keys) {
+          const val = await loadImageFromIndexedDB(key);
+          if (val) {
+            cached[key] = val;
+          }
+        }
+        if (Object.keys(cached).length > 0) {
+          rawSetSiteImages((prev) => ({ ...prev, ...cached }));
+        }
+      } catch (err) {
+        console.error("Failed to load cached images from IndexedDB:", err);
+      }
+    };
+    loadCachedImages();
+  }, []);
  
   // Category dynamic headers (Editable by admin, unified centered design)
   const [categoryHeaders, rawSetCategoryHeaders] = useState<typeof DEFAULT_CATEGORY_HEADERS>(DEFAULT_CATEGORY_HEADERS);
@@ -405,6 +574,70 @@ export default function App() {
     adminActiveTabRef.current = adminActiveTab;
   }, [adminActiveTab]);
 
+  // Admin Navigation Tab Drag and Swipe Logic
+  const adminMenuRef = React.useRef<HTMLDivElement>(null);
+  const adminDragInfo = React.useRef({
+    isDown: false,
+    startX: 0,
+    startY: 0,
+    scrollLeft: 0,
+    scrollTop: 0,
+    hasMoved: false,
+  });
+
+  const handleAdminDragStart = (e: React.MouseEvent | React.TouchEvent) => {
+    const container = adminMenuRef.current;
+    if (!container) return;
+
+    const pageX = 'touches' in e ? e.touches[0].pageX : e.pageX;
+    const pageY = 'touches' in e ? e.touches[0].pageY : e.pageY;
+
+    adminDragInfo.current = {
+      isDown: true,
+      startX: pageX - container.offsetLeft,
+      startY: pageY - container.offsetTop,
+      scrollLeft: container.scrollLeft,
+      scrollTop: container.scrollTop,
+      hasMoved: false,
+    };
+  };
+
+  const handleAdminDragMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!adminDragInfo.current.isDown) return;
+    const container = adminMenuRef.current;
+    if (!container) return;
+
+    const pageX = 'touches' in e ? e.touches[0].pageX : e.pageX;
+    const pageY = 'touches' in e ? e.touches[0].pageY : e.pageY;
+
+    const x = pageX - container.offsetLeft;
+    const y = pageY - container.offsetTop;
+
+    const walkX = (x - adminDragInfo.current.startX) * 1.5;
+    const walkY = (y - adminDragInfo.current.startY) * 1.5;
+
+    // Distinguish click vs drag (5px threshold)
+    if (Math.abs(walkX) > 5 || Math.abs(walkY) > 5) {
+      adminDragInfo.current.hasMoved = true;
+    }
+
+    if (container.scrollHeight > container.clientHeight) {
+      container.scrollTop = adminDragInfo.current.scrollTop - walkY;
+    }
+    if (container.scrollWidth > container.clientWidth) {
+      container.scrollLeft = adminDragInfo.current.scrollLeft - walkX;
+    }
+  };
+
+  const handleAdminDragEnd = () => {
+    adminDragInfo.current.isDown = false;
+    setTimeout(() => {
+      if (adminDragInfo.current) {
+        adminDragInfo.current.hasMoved = false;
+      }
+    }, 50);
+  };
+
   // Admin Donations states
   const [showAddDonationForm, setShowAddDonationForm] = useState(false);
   const [adminEditingDonation, setAdminEditingDonation] = useState<DonationRecord | null>(null);
@@ -416,14 +649,14 @@ export default function App() {
   const [newDonationDocUrl, setNewDonationDocUrl] = useState('');
 
   // Admin Association Info Form state
-  const [assocOfficeName, setAssocOfficeName] = useState(INITIAL_ASSOCIATION_INFO.officeName || '');
-  const [assocAddress, setAssocAddress] = useState(INITIAL_ASSOCIATION_INFO.address || '');
-  const [assocPhone, setAssocPhone] = useState(INITIAL_ASSOCIATION_INFO.phone || '');
-  const [assocFax, setAssocFax] = useState(INITIAL_ASSOCIATION_INFO.fax || '');
-  const [assocEmail, setAssocEmail] = useState(INITIAL_ASSOCIATION_INFO.email || '');
-  const [assocPermitNumber, setAssocPermitNumber] = useState(INITIAL_ASSOCIATION_INFO.permitNumber || '');
-  const [assocBusinessNumber, setAssocBusinessNumber] = useState(INITIAL_ASSOCIATION_INFO.businessNumber || '');
-  const [assocRepresentative, setAssocRepresentative] = useState(INITIAL_ASSOCIATION_INFO.representative || '');
+  const [assocOfficeName, setAssocOfficeName] = useState(getInitialAssociationInfo().officeName || '');
+  const [assocAddress, setAssocAddress] = useState(getInitialAssociationInfo().address || '');
+  const [assocPhone, setAssocPhone] = useState(getInitialAssociationInfo().phone || '');
+  const [assocFax, setAssocFax] = useState(getInitialAssociationInfo().fax || '');
+  const [assocEmail, setAssocEmail] = useState(getInitialAssociationInfo().email || '');
+  const [assocPermitNumber, setAssocPermitNumber] = useState(getInitialAssociationInfo().permitNumber || '');
+  const [assocBusinessNumber, setAssocBusinessNumber] = useState(getInitialAssociationInfo().businessNumber || '');
+  const [assocRepresentative, setAssocRepresentative] = useState(getInitialAssociationInfo().representative || '');
 
   // Admin schedules form state
   const [newEvTitle, setNewEvTitle] = useState('');
@@ -630,9 +863,47 @@ export default function App() {
 
     // 7. Site Images
     const unsubscribeImages = listenDoc<typeof DEFAULT_IMAGES>('settings', 'site_images', (data) => {
-      if (adminActiveTabRef.current !== 'images') {
-        rawSetSiteImages({ ...DEFAULT_IMAGES, ...data });
+      if (data) {
+        try {
+          const cleanLocal: any = {};
+          for (const k of Object.keys(data)) {
+            const val = (data as any)[k];
+            if (val && !val.startsWith('data:')) {
+              cleanLocal[k] = val;
+            }
+          }
+          localStorage.setItem('kcf_site_images', JSON.stringify({ ...DEFAULT_IMAGES, ...cleanLocal }));
+        } catch (e) {
+          console.error("Failed to write site images to localStorage from Firestore listener:", e);
+        }
+        if (adminActiveTabRef.current !== 'images') {
+          rawSetSiteImages((prev) => ({ ...prev, ...data }));
+        }
       }
+    });
+
+    // 7.1. Individual Site Images (New robust schema to bypass 1MB size limit)
+    const imageKeys = Object.keys(DEFAULT_IMAGES) as Array<keyof typeof DEFAULT_IMAGES>;
+    const unsubscribeIndividualImages = imageKeys.map((key) => {
+      return listenDoc<{ url: string }>('settings', `site_image_${key}`, (data) => {
+        if (data && data.url) {
+          // Save to IndexedDB (and if it is not base64/large, localStorage)
+          saveImageToIndexedDB(key, data.url);
+          if (!data.url.startsWith('data:')) {
+            try {
+              const saved = localStorage.getItem('kcf_site_images');
+              const parsed = saved ? JSON.parse(saved) : {};
+              parsed[key] = data.url;
+              localStorage.setItem('kcf_site_images', JSON.stringify(parsed));
+            } catch (e) {
+              console.error("Failed to save to localStorage:", e);
+            }
+          }
+          if (adminActiveTabRef.current !== 'images') {
+            rawSetSiteImages((prev) => ({ ...prev, [key]: data.url }));
+          }
+        }
+      });
     });
 
     // 8. Category Headers
@@ -660,6 +931,11 @@ export default function App() {
     // 10. Association Info
     const unsubscribeAssoc = listenDoc<AssociationInfo>('settings', 'association_info', (data) => {
       if (data) {
+        try {
+          localStorage.setItem('kcf_association_info', JSON.stringify(data));
+        } catch (e) {
+          console.error("Failed to write association info to localStorage from Firestore listener:", e);
+        }
         rawSetAssociationInfo(data);
         setAssocOfficeName(data.officeName || INITIAL_ASSOCIATION_INFO.officeName || '');
         setAssocAddress(data.address || INITIAL_ASSOCIATION_INFO.address || '');
@@ -713,6 +989,7 @@ export default function App() {
       unsubscribeCompetitions();
       unsubscribeDonations();
       unsubscribeImages();
+      unsubscribeIndividualImages.forEach((unsub) => unsub());
       unsubscribeHeaders();
       unsubscribePromises();
       unsubscribeAssoc();
@@ -934,6 +1211,81 @@ export default function App() {
     setSiteImages((prev) => ({ ...prev, [key]: url }));
   };
 
+  const handleImageUpload = async (key: keyof typeof DEFAULT_IMAGES, file: File) => {
+    // JPG, PNG, WEBP and JPG variants check
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+    const fileType = file.type.toLowerCase();
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    
+    if (!allowedTypes.includes(fileType) && !['jpg', 'png', 'webp', 'jpeg'].includes(fileExtension || '')) {
+      showToast('이미지 저장에 실패했습니다. 지원하지 않는 파일 형식입니다. (JPG, PNG, WEBP만 가능)', 'error');
+      return;
+    }
+
+    if (file.size > 15 * 1024 * 1024) { // 15MB absolute maximum limit
+      showToast('이미지 저장에 실패했습니다. 파일 용량이 너무 큽니다. (최대 15MB 이하만 업로드 가능)', 'error');
+      return;
+    }
+
+    if (file.size > 3 * 1024 * 1024) { // 3MB check for compression info
+      showToast('대용량 이미지가 선택되어 최적화 및 고강도 압축을 진행합니다.', 'info');
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      if (event.target?.result && typeof event.target.result === 'string') {
+        try {
+          // Validate if it is a real image
+          const isValid = await validateImageDataURL(event.target.result);
+          if (!isValid) {
+            showToast('이미지 저장에 실패했습니다. 유효하지 않은 이미지 파일입니다.', 'error');
+            return;
+          }
+
+          showToast('이미지 최적화 및 압축 중...', 'info');
+          // Adaptive compression & resizing to guarantee under 1MB limit
+          const compressed = await resizeAndCompressImage(event.target.result, file);
+          
+          showToast('서버 및 브라우저 저장소에 동시 저장 중...', 'info');
+          
+          // 1. Save locally in IndexedDB (High capacity storage)
+          await saveImageToIndexedDB(key, compressed);
+
+          // 2. Save to Firestore (Individual document for this image to bypass the 1MB collection-wide document limit)
+          await saveDoc('settings', `site_image_${key}`, { url: compressed });
+          
+          // 3. Update React state (which handles writing clean safe URLs to localStorage)
+          rawSetSiteImages((prev) => {
+            const next = { ...prev, [key]: compressed };
+            try {
+              const cleanLocal: any = {};
+              for (const k of Object.keys(next)) {
+                const val = (next as any)[k];
+                if (val && !val.startsWith('data:')) {
+                  cleanLocal[k] = val;
+                }
+              }
+              localStorage.setItem('kcf_site_images', JSON.stringify(cleanLocal));
+            } catch (e) {
+              console.error("LocalStorage write error:", e);
+            }
+            return next;
+          });
+
+          showToast('이미지가 성공적으로 저장되었습니다!', 'success');
+        } catch (err: any) {
+          console.error("Image saving failed:", err);
+          const errorMsg = err instanceof Error ? err.message : String(err);
+          showToast(`이미지 저장에 실패했습니다. (원인: ${errorMsg})`, 'error');
+        }
+      }
+    };
+    reader.onerror = () => {
+      showToast('이미지 저장에 실패했습니다. 파일을 읽는 중 오류가 발생했습니다.', 'error');
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleUpdateAssociationInfo = (updatedInfo: AssociationInfo) => {
     setAssociationInfo(updatedInfo);
   };
@@ -975,7 +1327,7 @@ export default function App() {
     <div className="min-h-screen bg-white text-zinc-950 font-sans antialiased selection:bg-blue-500/10 selection:text-blue-900">
       
       {/* 1. Header Navigation */}
-      <nav className="w-full fixed top-0 left-0 z-50 h-16 bg-white/95 backdrop-blur-md border-b border-zinc-200/80 shadow-xs px-4 sm:px-6 lg:px-16 flex justify-between items-center transition-all duration-300">
+      <nav className="w-full fixed top-0 left-0 z-50 h-16 bg-white/95 backdrop-blur-md border-b border-zinc-200/80 shadow-xs px-4 sm:px-6 lg:px-6 xl:px-16 flex justify-between items-center transition-all duration-300">
         <a href="#" onClick={(e) => { e.preventDefault(); handleTabChange('home'); }} className="flex items-center gap-3.5 cursor-pointer hover:opacity-85 transition duration-200 shrink-0">
           {/* Official KCF Logo - Stylized Cheerleader Figure */}
           <div id="kcf-header-logo-container" className="w-10 h-10 flex items-center justify-center shrink-0">
@@ -1029,17 +1381,17 @@ export default function App() {
               <span>한국치어리딩협회</span>
               <span className="text-red-500 font-sans font-black text-xs">KCF</span>
             </div>
-            <span className="hidden sm:inline-block text-[8px] text-zinc-400 tracking-wider uppercase font-semibold">
+            <span className="hidden xl:inline-block text-[8px] text-zinc-400 tracking-wider uppercase font-semibold">
               Korea Cheerleading Federation
             </span>
           </div>
         </a>
 
         {/* Desktop Menu links (Active Pills with Icons, showing on md: screens and larger) */}
-        <div className="hidden md:flex items-center gap-1 lg:gap-2 text-xs lg:text-sm font-semibold text-zinc-500 flex-nowrap">
+        <div className="hidden md:flex items-center gap-0.5 lg:gap-1.5 xl:gap-2 text-[11px] xl:text-xs 2xl:text-sm font-semibold text-zinc-500 flex-nowrap shrink-1">
           <button
             onClick={() => handleTabChange('home')}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-1 lg:gap-1.5 px-1.5 py-1.5 lg:px-2.5 rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap ${
               currentTab === 'home' 
                 ? 'bg-blue-600/10 text-blue-600 font-extrabold' 
                 : 'text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100'
@@ -1050,7 +1402,7 @@ export default function App() {
           </button>
           <button
             onClick={() => handleTabChange('schedule')}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-1 lg:gap-1.5 px-1.5 py-1.5 lg:px-2.5 rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap ${
               currentTab === 'schedule' 
                 ? 'bg-blue-600/10 text-blue-600 font-extrabold' 
                 : 'text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100'
@@ -1061,7 +1413,7 @@ export default function App() {
           </button>
           <button
             onClick={() => handleTabChange('competitions')}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-1 lg:gap-1.5 px-1.5 py-1.5 lg:px-2.5 rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap ${
               currentTab === 'competitions' 
                 ? 'bg-blue-600/10 text-blue-600 font-extrabold' 
                 : 'text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100'
@@ -1072,7 +1424,7 @@ export default function App() {
           </button>
           <button
             onClick={() => handleTabChange('teams')}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-1 lg:gap-1.5 px-1.5 py-1.5 lg:px-2.5 rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap ${
               currentTab === 'teams' 
                 ? 'bg-blue-600/10 text-blue-600 font-extrabold' 
                 : 'text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100'
@@ -1083,7 +1435,7 @@ export default function App() {
           </button>
           <button
             onClick={() => handleTabChange('athletes')}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-1 lg:gap-1.5 px-1.5 py-1.5 lg:px-2.5 rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap ${
               currentTab === 'athletes' 
                 ? 'bg-blue-600/10 text-blue-600 font-extrabold' 
                 : 'text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100'
@@ -1094,7 +1446,7 @@ export default function App() {
           </button>
           <button
             onClick={() => handleTabChange('notice')}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-1 lg:gap-1.5 px-1.5 py-1.5 lg:px-2.5 rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap ${
               currentTab === 'notice' 
                 ? 'bg-blue-600/10 text-blue-600 font-extrabold' 
                 : 'text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100'
@@ -1105,7 +1457,7 @@ export default function App() {
           </button>
           <button
             onClick={() => handleTabChange('contact')}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-1 lg:gap-1.5 px-1.5 py-1.5 lg:px-2.5 rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap ${
               currentTab === 'contact' 
                 ? 'bg-blue-600/10 text-blue-600 font-extrabold' 
                 : 'text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100'
@@ -1116,7 +1468,7 @@ export default function App() {
           </button>
           <button
             onClick={() => handleTabChange('donations')}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-1 lg:gap-1.5 px-1.5 py-1.5 lg:px-2.5 rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap ${
               currentTab === 'donations' 
                 ? 'bg-blue-600/10 text-blue-600 font-extrabold' 
                 : 'text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100'
@@ -2071,41 +2423,69 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Navigation Tabs */}
-              <div className="flex gap-1.5 p-1.5 bg-zinc-100 rounded-2xl mb-6 w-full overflow-x-auto no-scrollbar scroll-smooth">
-                {[
-                  { id: 'stats', label: '종합 요약', icon: Activity },
-                  { id: 'notices', label: '공지 관리', icon: Megaphone },
-                  { id: 'teams', label: '등록팀 관리', icon: Users },
-                  { id: 'inquiries', label: '문의 관리인 박스', icon: Inbox },
-                  { id: 'schedules', label: '일정 관리', icon: Calendar },
-                  { id: 'images', label: '이미지 관리', icon: Image },
-                  { id: 'athletes', label: '등록선수 관리', icon: UserCheck },
-                  { id: 'competitions', label: '대회 정보 관리', icon: Trophy },
-                  { id: 'donations', label: '기부금 관리', icon: Heart },
-                  { id: 'headers', label: '안내문구 & 핵심약속', icon: Type },
-                  { id: 'association', label: '협회 정보 관리', icon: Settings },
-                ].map(tab => {
-                  const Icon = tab.icon;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setAdminActiveTab(tab.id as any)}
-                      className={`px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition duration-300 cursor-pointer shrink-0 ${
-                        adminActiveTab === tab.id
-                          ? 'bg-white text-zinc-950 shadow-sm font-semibold'
-                          : 'text-zinc-500 hover:text-zinc-900 bg-transparent'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                      {tab.label}
-                    </button>
-                  );
-                })}
-              </div>
+              {/* Main Workspace Body */}
+              <div className="flex-1 flex flex-col md:flex-row gap-6 overflow-hidden min-h-0">
+                {/* Navigation Tabs (Sidebar on desktop, horizontal scroll on mobile) */}
+                <div className="relative flex-none w-full md:w-64 select-none">
+                  {/* Subtle fade indicator on mobile (Left/Right) and desktop (Top/Bottom) */}
+                  <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-zinc-100 to-transparent z-10 md:hidden opacity-40" />
+                  <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-zinc-100 to-transparent z-10 md:hidden opacity-40" />
+                  <div className="pointer-events-none absolute top-0 left-0 right-0 h-6 bg-gradient-to-b from-zinc-50/80 to-transparent z-10 hidden md:block opacity-40" />
+                  <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-zinc-50/80 to-transparent z-10 hidden md:block opacity-40" />
+                  
+                  <div
+                    ref={adminMenuRef}
+                    onMouseDown={handleAdminDragStart}
+                    onMouseMove={handleAdminDragMove}
+                    onMouseUp={handleAdminDragEnd}
+                    onMouseLeave={handleAdminDragEnd}
+                    onTouchStart={handleAdminDragStart}
+                    onTouchMove={handleAdminDragMove}
+                    onTouchEnd={handleAdminDragEnd}
+                    className="flex md:flex-col gap-1 p-1 bg-zinc-100 md:bg-zinc-50/80 border md:border-zinc-200/50 rounded-2xl w-full md:w-64 overflow-x-auto md:overflow-y-auto custom-admin-scrollbar scroll-smooth cursor-grab active:cursor-grabbing md:max-h-[68vh]"
+                  >
+                    {[
+                      { id: 'stats', label: '종합 요약', icon: Activity },
+                      { id: 'notices', label: '공지 관리', icon: Megaphone },
+                      { id: 'teams', label: '등록팀 관리', icon: Users },
+                      { id: 'inquiries', label: '문의 관리인 박스', icon: Inbox },
+                      { id: 'schedules', label: '일정 관리', icon: Calendar },
+                      { id: 'images', label: '이미지 관리', icon: ImageIcon },
+                      { id: 'athletes', label: '등록선수 관리', icon: UserCheck },
+                      { id: 'competitions', label: '대회 정보 관리', icon: Trophy },
+                      { id: 'donations', label: '기부금 관리', icon: Heart },
+                      { id: 'headers', label: '안내문구 & 핵심약속', icon: Type },
+                      { id: 'association', label: '협회 정보 관리', icon: Settings },
+                    ].map(tab => {
+                      const Icon = tab.icon;
+                      const isActive = adminActiveTab === tab.id;
+                      return (
+                        <button
+                          key={tab.id}
+                          onClick={(e) => {
+                            if (adminDragInfo.current.hasMoved) {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              return;
+                            }
+                            setAdminActiveTab(tab.id as any);
+                          }}
+                          className={`px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition duration-200 cursor-pointer shrink-0 md:w-full text-left select-none ${
+                            isActive
+                              ? 'bg-blue-600 text-white shadow-xs font-bold'
+                              : 'text-zinc-600 hover:text-zinc-950 hover:bg-zinc-200/50 bg-transparent'
+                          }`}
+                        >
+                          <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-zinc-400'}`} />
+                          <span className="truncate">{tab.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-              {/* Content Panels */}
-              <div className="flex-1 overflow-y-auto pr-1">
+                {/* Content Panels */}
+                <div className="flex-1 overflow-y-auto pr-1">
                 
                 {/* 1. Statistics Panel */}
                 {adminActiveTab === 'stats' && (
@@ -3906,27 +4286,13 @@ export default function App() {
                               />
                               <input
                                 type="file"
-                                accept="image/*"
+                                accept="image/jpeg,image/png,image/webp"
                                 id={`file-upload-${imgConfig.key}`}
                                 className="hidden"
                                 onChange={(e) => {
                                   const file = e.target.files?.[0];
                                   if (file) {
-                                    const reader = new FileReader();
-                                    reader.onload = async (event) => {
-                                      if (event.target?.result && typeof event.target.result === 'string') {
-                                        try {
-                                          showToast('이미지 크기를 압축 및 최적화하는 중입니다...', 'info');
-                                          const compressed = await compressImage(event.target.result);
-                                          handleUpdateImage(imgConfig.key, compressed);
-                                          showToast('이미지 업로드 및 최적화가 완료되었습니다!', 'success');
-                                        } catch (err) {
-                                          console.error("Image compression failed:", err);
-                                          handleUpdateImage(imgConfig.key, event.target.result);
-                                        }
-                                      }
-                                    };
-                                    reader.readAsDataURL(file);
+                                    handleImageUpload(imgConfig.key, file);
                                   }
                                 }}
                               />
@@ -3936,6 +4302,46 @@ export default function App() {
                               >
                                 <Upload className="w-3.5 h-3.5" />
                                 직접 업로드
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    showToast('설정을 저장 중입니다...', 'info');
+                                    const imgUrl = siteImages[imgConfig.key];
+                                    
+                                    // Save to Firestore (Individual document)
+                                    await saveDoc('settings', `site_image_${imgConfig.key}`, { url: imgUrl });
+                                    
+                                    // Save to IndexedDB if it is base64
+                                    if (imgUrl?.startsWith('data:')) {
+                                      await saveImageToIndexedDB(imgConfig.key, imgUrl);
+                                    }
+                                    
+                                    // Save clean safe version to localStorage
+                                    try {
+                                      const cleanLocal: any = {};
+                                      for (const k of Object.keys(siteImages)) {
+                                        const val = (siteImages as any)[k];
+                                        if (val && !val.startsWith('data:')) {
+                                          cleanLocal[k] = val;
+                                        }
+                                      }
+                                      localStorage.setItem('kcf_site_images', JSON.stringify(cleanLocal));
+                                    } catch (e) {
+                                      console.error("Failed to write to localStorage:", e);
+                                    }
+                                    
+                                    showToast('이미지가 성공적으로 저장되었습니다!', 'success');
+                                  } catch (err: any) {
+                                    console.error("Save failed:", err);
+                                    const errorMsg = err instanceof Error ? err.message : String(err);
+                                    showToast(`이미지 저장에 실패했습니다. (원인: ${errorMsg})`, 'error');
+                                  }
+                                }}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-[10px] font-semibold transition shrink-0 cursor-pointer flex items-center gap-1"
+                              >
+                                <CheckCircle className="w-3.5 h-3.5" />
+                                저장
                               </button>
                               {imgConfig.noReset ? (
                                 <span className="inline-flex items-center bg-amber-50 text-amber-700 border border-amber-100 rounded-xl px-3 py-2 text-[9px] font-bold select-none">
@@ -5728,7 +6134,9 @@ export default function App() {
 
               </div>
 
-              {/* Footer */}
+            </div>
+
+            {/* Footer */}
               <div className="mt-6 pt-4 border-t border-zinc-200 flex justify-between items-center text-xs text-zinc-400">
                 <span>사단법인 한국치어리딩협회 통합 전산관리센터</span>
                 <button
