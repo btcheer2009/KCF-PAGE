@@ -1264,7 +1264,6 @@ export default function App() {
   };
 
   const handleImageUpload = async (key: keyof typeof DEFAULT_IMAGES, file: File) => {
-    // JPG, PNG, WEBP and JPG variants check
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
     const fileType = file.type.toLowerCase();
     const fileExtension = file.name.split('.').pop()?.toLowerCase();
@@ -1274,68 +1273,33 @@ export default function App() {
       return;
     }
 
-    if (file.size > 15 * 1024 * 1024) { // 15MB absolute maximum limit
+    if (file.size > 15 * 1024 * 1024) {
       showToast('이미지 저장에 실패했습니다. 파일 용량이 너무 큽니다. (최대 15MB 이하만 업로드 가능)', 'error');
       return;
     }
 
-    if (file.size > 3 * 1024 * 1024) { // 3MB check for compression info
-      showToast('대용량 이미지가 선택되어 최적화 및 고강도 압축을 진행합니다.', 'info');
+    try {
+      showToast('Firebase Storage에 이미지 업로드 중...', 'info');
+
+      const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const uniqueFileName = `site-images/${String(key)}-${Date.now()}-${safeFileName}`;
+      const downloadUrl = await uploadFileToStorage(uniqueFileName, file);
+
+      await saveDoc('settings', `site_image_${key}`, { url: downloadUrl });
+      await saveImageToIndexedDB(key, downloadUrl);
+
+      rawSetSiteImages((prev) => {
+        const next = { ...prev, [key]: downloadUrl };
+        localStorage.setItem('kcf_site_images', JSON.stringify(next));
+        return next;
+      });
+
+      showToast('이미지가 성공적으로 저장되었습니다!', 'success');
+    } catch (err: any) {
+      console.error('Image storage upload failed:', err);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      showToast(`이미지 저장에 실패했습니다. (원인: ${errorMsg})`, 'error');
     }
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      if (event.target?.result && typeof event.target.result === 'string') {
-        try {
-          // Validate if it is a real image
-          const isValid = await validateImageDataURL(event.target.result);
-          if (!isValid) {
-            showToast('이미지 저장에 실패했습니다. 유효하지 않은 이미지 파일입니다.', 'error');
-            return;
-          }
-
-          showToast('이미지 최적화 및 압축 중...', 'info');
-          // Adaptive compression & resizing to guarantee under 1MB limit
-          const compressed = await resizeAndCompressImage(event.target.result, file);
-          
-          showToast('서버 및 브라우저 저장소에 동시 저장 중...', 'info');
-          
-          // 1. Save locally in IndexedDB (High capacity storage)
-          await saveImageToIndexedDB(key, compressed);
-
-          // 2. Save to Firestore (Individual document for this image to bypass the 1MB collection-wide document limit)
-          await saveDoc('settings', `site_image_${key}`, { url: compressed });
-          
-          // 3. Update React state (which handles writing clean safe URLs to localStorage)
-          rawSetSiteImages((prev) => {
-            const next = { ...prev, [key]: compressed };
-            try {
-              const cleanLocal: any = {};
-              for (const k of Object.keys(next)) {
-                const val = (next as any)[k];
-                if (val && !val.startsWith('data:')) {
-                  cleanLocal[k] = val;
-                }
-              }
-              localStorage.setItem('kcf_site_images', JSON.stringify(cleanLocal));
-            } catch (e) {
-              console.error("LocalStorage write error:", e);
-            }
-            return next;
-          });
-
-          showToast('이미지가 성공적으로 저장되었습니다!', 'success');
-        } catch (err: any) {
-          console.error("Image saving failed:", err);
-          const errorMsg = err instanceof Error ? err.message : String(err);
-          showToast(`이미지 저장에 실패했습니다. (원인: ${errorMsg})`, 'error');
-        }
-      }
-    };
-    reader.onerror = () => {
-      showToast('이미지 저장에 실패했습니다. 파일을 읽는 중 오류가 발생했습니다.', 'error');
-    };
-    reader.readAsDataURL(file);
   };
 
   const handleHeroImageUpload = async (file: File) => {
@@ -4615,15 +4579,20 @@ export default function App() {
                                         type="file"
                                         accept="image/*"
                                         className="hidden"
-                                        onChange={(e) => {
+                                        onChange={async (e) => {
                                           const file = e.target.files?.[0];
                                           if (file) {
-                                            const reader = new FileReader();
-                                            reader.onloadend = () => {
-                                              setNewAthleteImageUrl(reader.result as string);
+                                            try {
+                                              showToast('선수 사진 업로드 중...', 'info');
+                                              const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                                              const uniqueFileName = `athletes/${Date.now()}-${safeFileName}`;
+                                              const downloadUrl = await uploadFileToStorage(uniqueFileName, file);
+                                              setNewAthleteImageUrl(downloadUrl);
                                               showToast('선수 사진이 성공적으로 업로드되었습니다.', 'success');
-                                            };
-                                            reader.readAsDataURL(file);
+                                            } catch (err: any) {
+                                              console.error('Athlete image upload failed:', err);
+                                              showToast(`선수 사진 업로드에 실패했습니다. (원인: ${err.message || err})`, 'error');
+                                            }
                                           }
                                         }}
                                       />
@@ -4768,15 +4737,20 @@ export default function App() {
                                             type="file"
                                             accept="image/*"
                                             className="hidden"
-                                            onChange={(e) => {
+                                            onChange={async (e) => {
                                               const file = e.target.files?.[0];
                                               if (file) {
-                                                const reader = new FileReader();
-                                                reader.onloadend = () => {
-                                                  setEditingAthleteData({ ...editData, imageUrl: reader.result as string });
+                                                try {
+                                                  showToast('선수 사진 업로드 중...', 'info');
+                                                  const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                                                  const uniqueFileName = `athletes/${Date.now()}-${safeFileName}`;
+                                                  const downloadUrl = await uploadFileToStorage(uniqueFileName, file);
+                                                  setEditingAthleteData({ ...editData, imageUrl: downloadUrl });
                                                   showToast('선수 사진이 성공적으로 업로드되었습니다.', 'success');
-                                                };
-                                                reader.readAsDataURL(file);
+                                                } catch (err: any) {
+                                                  console.error('Athlete image upload failed:', err);
+                                                  showToast(`선수 사진 업로드에 실패했습니다. (원인: ${err.message || err})`, 'error');
+                                                }
                                               }
                                             }}
                                           />
@@ -5270,15 +5244,20 @@ export default function App() {
                                   type="file"
                                   accept="image/*"
                                   className="hidden"
-                                  onChange={(e) => {
+                                  onChange={async (e) => {
                                     const file = e.target.files?.[0];
                                     if (file) {
-                                      const reader = new FileReader();
-                                      reader.onloadend = () => {
-                                        setAdminEditingComp({ ...adminEditingComp, imageUrl: reader.result as string });
+                                      try {
+                                        showToast('대회 이미지 업로드 중...', 'info');
+                                        const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                                        const uniqueFileName = `competitions/${Date.now()}-${safeFileName}`;
+                                        const downloadUrl = await uploadFileToStorage(uniqueFileName, file);
+                                        setAdminEditingComp({ ...adminEditingComp, imageUrl: downloadUrl });
                                         showToast('대회 이미지가 새로운 파일로 교체되었습니다.', 'success');
-                                      };
-                                      reader.readAsDataURL(file);
+                                      } catch (err: any) {
+                                        console.error('Competition image upload failed:', err);
+                                        showToast(`대회 이미지 업로드에 실패했습니다. (원인: ${err.message || err})`, 'error');
+                                      }
                                     }
                                   }}
                                 />
@@ -5452,15 +5431,20 @@ export default function App() {
                                         type="file"
                                         accept="image/*"
                                         className="hidden"
-                                        onChange={(e) => {
+                                        onChange={async (e) => {
                                           const file = e.target.files?.[0];
                                           if (file) {
-                                            const reader = new FileReader();
-                                            reader.onloadend = () => {
-                                              setNewCompImageUrl(reader.result as string);
+                                            try {
+                                              showToast('대회용 사진 이미지 업로드 중...', 'info');
+                                              const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                                              const uniqueFileName = `competitions/${Date.now()}-${safeFileName}`;
+                                              const downloadUrl = await uploadFileToStorage(uniqueFileName, file);
+                                              setNewCompImageUrl(downloadUrl);
                                               showToast('대회용 사진 이미지가 첨부되었습니다.', 'success');
-                                            };
-                                            reader.readAsDataURL(file);
+                                            } catch (err: any) {
+                                              console.error('Competition image upload failed:', err);
+                                              showToast(`대회용 사진 이미지 업로드에 실패했습니다. (원인: ${err.message || err})`, 'error');
+                                            }
                                           }
                                         }}
                                       />

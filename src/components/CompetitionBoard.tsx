@@ -9,6 +9,7 @@ import {
   Search, Calendar, Eye, ShieldAlert, Plus, Trash2, Edit, X, Image, MapPin, Award, ArrowRight, CheckCircle, Upload, Trophy
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { uploadFileToStorage } from '../lib/db';
 
 interface CompetitionBoardProps {
   competitions: CompetitionPost[];
@@ -65,18 +66,24 @@ export default function CompetitionBoard({
     setCompetitions(updated);
   };
 
-  // Convert File to Base64
-  const handleFileProcess = (file: File, callback: (base64: string) => void) => {
+  // Upload image files to Firebase Storage and store only the public download URL.
+  const handleFileProcess = async (file: File, callback: (url: string) => void) => {
     if (!file.type.startsWith('image/')) {
       triggerToast('이미지 파일만 업로드할 수 있습니다.', 'error');
       return;
     }
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      callback(reader.result as string);
+
+    try {
+      triggerToast('이미지 업로드 중...', 'info');
+      const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const uniqueFileName = `competitions/${Date.now()}-${safeFileName}`;
+      const downloadUrl = await uploadFileToStorage(uniqueFileName, file);
+      callback(downloadUrl);
       triggerToast('이미지가 성공적으로 첨부되었습니다.', 'success');
-    };
-    reader.readAsDataURL(file);
+    } catch (err: any) {
+      console.error('Competition image upload failed:', err);
+      triggerToast(`이미지 업로드에 실패했습니다. (원인: ${err.message || err})`, 'error');
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -88,7 +95,7 @@ export default function CompetitionBoard({
     setIsDragging(false);
   };
 
-  const handleDrop = (e: React.DragEvent, callback: (base64: string) => void) => {
+  const handleDrop = (e: React.DragEvent, callback: (url: string) => void) => {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];

@@ -1,4 +1,4 @@
-import { db, auth, storage } from './firebase';
+import { db, auth } from './firebase';
 import { 
   collection, 
   doc, 
@@ -12,7 +12,6 @@ import {
   query,
   limit
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 export enum OperationType {
   CREATE = 'create',
@@ -218,8 +217,43 @@ export async function saveDoc(colName: string, docId: string, data: any) {
 /**
  * Uploads a file to Firebase Storage and returns the download URL.
  */
+const CLOUDINARY_CLOUD_NAME = 'ktb87j8i';
+const CLOUDINARY_UPLOAD_PRESET = 'kcf-homepage';
+
+const getCloudinaryFolder = (pathStr: string) => {
+  const parts = pathStr.replace(/^\/+/, '').split('/').filter(Boolean);
+  parts.pop();
+
+  return parts.length > 0
+    ? `kcf-homepage/${parts.join('/')}`
+    : 'kcf-homepage/uploads';
+};
+
 export async function uploadFileToStorage(pathStr: string, file: File): Promise<string> {
-  const imageRef = ref(storage, pathStr);
-  await uploadBytes(imageRef, file);
-  return await getDownloadURL(imageRef);
+  const formData = new FormData();
+
+  formData.append('file', file);
+  formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+  formData.append('folder', getCloudinaryFolder(pathStr));
+
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+    {
+      method: 'POST',
+      body: formData,
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Cloudinary 업로드 실패: ${errorText}`);
+  }
+
+  const data = await response.json();
+
+  if (!data.secure_url) {
+    throw new Error('Cloudinary 업로드는 성공했지만 이미지 URL을 받지 못했습니다.');
+  }
+
+  return data.secure_url as string;
 }
