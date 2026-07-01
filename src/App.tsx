@@ -1279,7 +1279,7 @@ export default function App() {
     }
 
     try {
-      showToast('Firebase Storage에 이미지 업로드 중...', 'info');
+      showToast('Cloudinary에 이미지 업로드 중...', 'info');
 
       const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       const uniqueFileName = `site-images/${String(key)}-${Date.now()}-${safeFileName}`;
