@@ -229,7 +229,6 @@ const getCloudinaryFolder = (pathStr: string) => {
     : 'kcf-homepage/uploads';
 };
 
-export async function uploadFileToStorage(pathStr: string, file: File): Promise<string> {
   const CLOUDINARY_CLOUD_NAME = 'ktb87j8i';
 const CLOUDINARY_UPLOAD_PRESET = 'kcf-homepage';
 
