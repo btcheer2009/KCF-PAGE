@@ -230,6 +230,19 @@ const getCloudinaryFolder = (pathStr: string) => {
 };
 
 export async function uploadFileToStorage(pathStr: string, file: File): Promise<string> {
+  const CLOUDINARY_CLOUD_NAME = 'ktb87j8i';
+const CLOUDINARY_UPLOAD_PRESET = 'kcf-homepage';
+
+const getCloudinaryFolder = (pathStr: string) => {
+  const parts = pathStr.replace(/^\/+/, '').split('/').filter(Boolean);
+  parts.pop();
+
+  return parts.length > 0
+    ? `kcf-homepage/${parts.join('/')}`
+    : 'kcf-homepage/uploads';
+};
+
+export async function uploadFileToStorage(pathStr: string, file: File): Promise<string> {
   const formData = new FormData();
 
   formData.append('file', file);
