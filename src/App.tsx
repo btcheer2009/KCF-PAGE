@@ -2309,9 +2309,9 @@ export default function App() {
             </p>
             
             <div className="text-[10px] text-slate-500 space-y-1 pt-2 font-light">
-              <p>주소: {associationInfo.address || '서울특별시 송파구 올림픽로 424 올림픽공원 한라관 203호'}</p>
-              <p>대표전화: {associationInfo.phone || '02-421-8890'} {associationInfo.fax && `| 팩스: ${associationInfo.fax}`}</p>
-              <p>이메일: {associationInfo.email || 'kcf_office@cheerleading.or.kr'}</p>
+              <p>주소: {associationInfo.address || '서울특별시 강서구 양천로 470, 지하 1층 비 106-14-1호'}</p>
+              <p>대표전화: {associationInfo.phone || '010-6233-27790'} {associationInfo.fax && `| 팩스: ${associationInfo.fax}`}</p>
+              <p>이메일: {associationInfo.email || 'kcf.hoony@gmail.com'}</p>
             </div>
 
             <p className="text-[10px] text-slate-500 pt-1">
@@ -5019,7 +5019,7 @@ export default function App() {
                             value={assocOfficeName}
                             onChange={(e) => setAssocOfficeName(e.target.value)}
                             className="w-full bg-white border border-zinc-200 rounded-xl p-2.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-900"
-                            placeholder="예: KCF 서울 중앙 사무국"
+                            placeholder="예: KCF 중앙 사무국"
                           />
                         </div>
                         <div className="space-y-1">
@@ -5029,7 +5029,7 @@ export default function App() {
                             value={assocRepresentative}
                             onChange={(e) => setAssocRepresentative(e.target.value)}
                             className="w-full bg-white border border-zinc-200 rounded-xl p-2.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-900"
-                            placeholder="예: 이성규"
+                            placeholder="예: 강훈"
                           />
                         </div>
                       </div>
@@ -5041,7 +5041,7 @@ export default function App() {
                           value={assocAddress}
                           onChange={(e) => setAssocAddress(e.target.value)}
                           className="w-full bg-white border border-zinc-200 rounded-xl p-2.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-900"
-                          placeholder="예: 서울특별시 송파구 올림픽로 424..."
+                          placeholder="예: 서울특별시 강서구 양천로..."
                         />
                       </div>
 
