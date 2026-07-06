@@ -278,28 +278,28 @@ export default function InquiryHub({
         {/* Association Office Meta info */}
         <div className="mt-8 border-t border-zinc-200 pt-6 space-y-4">
           <h6 className="text-xs font-bold text-zinc-950">
-            {associationInfo?.officeName || 'KCF 서울 중앙 사무국'}
+            {associationInfo?.officeName || 'KCF 중앙 사무국'}
           </h6>
           
           <div className="space-y-3.5 text-xs text-zinc-500 font-normal">
             <div className="flex items-start gap-2.5">
               <MapPin className="w-4 h-4 text-zinc-400 shrink-0 mt-0.5" />
               <span>
-                {associationInfo?.address || '서울특별시 송파구 올림픽로 424 올림픽공원 한라관 203호'}
+                {associationInfo?.address || '서울특별시 강서구 양천로 470, 지하 1층 비 106-14-1호'}
               </span>
             </div>
             
             <div className="flex items-center gap-2.5">
               <Phone className="w-4 h-4 text-zinc-400 shrink-0" />
               <span>
-                대표전화: {associationInfo?.phone || '02-421-8890'}
+                대표전화: {associationInfo?.phone || '010-6233-2779'}
               </span>
             </div>
 
             <div className="flex items-center gap-2.5">
               <Mail className="w-4 h-4 text-zinc-400 shrink-0" />
               <span>
-                이메일: {associationInfo?.email || 'kcf_office@cheerleading.or.kr'}
+                이메일: {associationInfo?.email || 'kcf.hoony@gmail.com'}
               </span>
             </div>
           </div>
