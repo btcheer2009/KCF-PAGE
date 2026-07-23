@@ -990,7 +990,7 @@ export default function App() {
         seedInitialDoc<{ list: typeof DEFAULT_CORE_PROMISES }>('settings', 'core_promises', { list: DEFAULT_CORE_PROMISES }),
         seedInitialDoc<AssociationInfo>('settings', 'association_info', INITIAL_ASSOCIATION_INFO),
         seedInitialDoc<HomepageContent>('site_content', 'homepage', DEFAULT_HOMEPAGE_CONTENT),
-        seedInitialDoc<{ password: string }>('settings', 'admin_config', { password: 'bt2009' }),
+        seedInitialDoc<{ configured: boolean }>('settings', 'admin_config', { configured: true }),
         seedInitialDoc<{ list: { id: string; label: string }[] }>('settings', 'team_categories', { list: [
           { id: 'allstar', label: '올스타 치어 (Allstar)' },
           { id: 'university', label: '대학 치어 동아리 (University)' },
@@ -1055,10 +1055,8 @@ export default function App() {
 
     // 6.6. Media Posts
     const unsubscribeMediaPosts = listenCollection<MediaPost>('media_posts', (data) => {
-      if (data && data.length > 0) {
-        const sorted = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        rawSetMediaPosts(sorted);
-      }
+      const sorted = (data || []).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      rawSetMediaPosts(sorted);
     });
 
     // 7. Site Images

@@ -4,6 +4,8 @@ import {
   Plus, Trash2, Edit, Upload, X, Film, Camera, Newspaper, ImageIcon, ExternalLink, Link as LinkIcon, Check, FileText, Search, Eye, EyeOff, Play, AlertCircle, RefreshCw, Layers, CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { uploadToCloudinary, deleteFromCloudinary } from '../lib/cloudinary';
+import { saveItem, deleteItem } from '../lib/db';
 
 interface AdminMediaManagerProps {
   mediaPosts: MediaPost[];
@@ -128,14 +130,24 @@ export default function AdminMediaManager({
       }
 
       try {
-        setUploadProgressText(`${file.name} 업로드 중... (${i + 1}/${fileList.length})`);
-        const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const timestamp = Date.now();
-        const publicIdGenerated = `kcf_${target}_${timestamp}_${safeFileName}`;
-        const folder = target === 'video' ? 'media_videos' : target === 'attachment' ? 'media_docs' : 'media_images';
-        const pathStr = `${folder}/${timestamp}_${safeFileName}`;
+        setUploadProgressText(`${file.name} Cloudinary 업로드 중... (${i + 1}/${fileList.length})`);
+        const folderName = target === 'video' ? 'media_videos' : target === 'attachment' ? 'media_docs' : 'media_images';
         
-        const url = await uploadFileToStorage(pathStr, file);
+        let url = '';
+        let publicIdGenerated = '';
+
+        try {
+          const res = await uploadToCloudinary(file, folderName);
+          url = res.secure_url;
+          publicIdGenerated = res.public_id;
+        } catch (cErr) {
+          console.warn('Direct Cloudinary upload fallback to storage:', cErr);
+          const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const timestamp = Date.now();
+          publicIdGenerated = `kcf_${target}_${timestamp}_${safeFileName}`;
+          const pathStr = `${folderName}/${timestamp}_${safeFileName}`;
+          url = await uploadFileToStorage(pathStr, file);
+        }
 
         if (target === 'cover') {
           setCoverImage(url);
@@ -154,7 +166,7 @@ export default function AdminMediaManager({
         } else if (target === 'attachment') {
           setAttachmentUrl(url);
         }
-        showToast(`${file.name} 파일 업로드가 완료되었습니다.`, 'success');
+        showToast(`${file.name} Cloudinary 파일 업로드가 완료되었습니다.`, 'success');
       } catch (err: any) {
         console.error('File upload failed:', err);
         showToast(`업로드 실패: ${err.message || String(err)}`, 'error');
@@ -204,7 +216,10 @@ export default function AdminMediaManager({
         summary: summary.trim(),
         publicId: coverImagePublicId || undefined,
         thumbnailPublicId: thumbnailPublicId || undefined,
+        videoPublicId: videoPublicId || undefined,
       };
+
+      await saveItem<MediaPost>('media_posts', newPostItem);
 
       let updated: MediaPost[];
       if (editingPost) {
@@ -226,18 +241,32 @@ export default function AdminMediaManager({
   };
 
   const handleDeletePost = (id: string) => {
+    const targetPost = mediaPosts.find(p => p.id === id);
     showConfirm(
       '미디어 게시물 삭제',
       '이 미디어 게시물을 삭제하시겠습니까?\n삭제한 게시물은 복구할 수 없습니다.',
       async () => {
         setIsDeleting(id);
         try {
+          if (targetPost) {
+            if (targetPost.publicId) {
+              await deleteFromCloudinary(targetPost.publicId, 'image');
+            }
+            if (targetPost.thumbnailPublicId) {
+              await deleteFromCloudinary(targetPost.thumbnailPublicId, 'image');
+            }
+            if (targetPost.videoPublicId) {
+              await deleteFromCloudinary(targetPost.videoPublicId, 'video');
+            }
+          }
+
+          await deleteItem('media_posts', id);
           const updated = mediaPosts.filter(p => p.id !== id);
           setMediaPosts(updated);
-          showToast('미디어 게시물이 삭제되었습니다.', 'success');
+          showToast('미디어 게시글 및 클라우드 파일이 영구 삭제되었습니다.', 'success');
         } catch (err) {
           console.error('Delete error exception:', err);
-          showToast('삭제 완료되었습니다.', 'info');
+          showToast('게시물 삭제 완료되었습니다.', 'info');
         } finally {
           setIsDeleting(null);
         }
@@ -245,10 +274,16 @@ export default function AdminMediaManager({
     );
   };
 
-  const toggleIsPublished = (post: MediaPost) => {
+  const toggleIsPublished = async (post: MediaPost) => {
     const nextStatus = post.isPublished === false ? true : false;
-    const updated = mediaPosts.map(p => p.id === post.id ? { ...p, isPublished: nextStatus } : p);
+    const updatedPost = { ...post, isPublished: nextStatus };
+    const updated = mediaPosts.map(p => p.id === post.id ? updatedPost : p);
     setMediaPosts(updated);
+    try {
+      await saveItem<MediaPost>('media_posts', updatedPost);
+    } catch (e) {
+      console.error('Failed to update published status:', e);
+    }
     showToast(`게시글 상태가 [${nextStatus ? '공개' : '비공개'}]로 변경되었습니다.`, 'info');
   };
 

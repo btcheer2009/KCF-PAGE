@@ -16,6 +16,7 @@ export interface MediaPost {
   isPublished?: boolean;
   publicId?: string;
   thumbnailPublicId?: string;
+  videoPublicId?: string;
 
   // Photo Gallery Specific
   coverImage?: string;

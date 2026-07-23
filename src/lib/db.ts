@@ -184,9 +184,13 @@ export function listenDoc<T>(
 /**
  * Saves or updates an item in a Firestore collection.
  */
-export async function saveItem(colName: string, id: string, data: any) {
+export async function saveItem<T extends { id: string }>(colName: string, item: T): Promise<void>;
+export async function saveItem(colName: string, id: string, data: any): Promise<void>;
+export async function saveItem(colName: string, idOrItem: any, data?: any) {
+  const id = typeof idOrItem === 'string' ? idOrItem : idOrItem?.id;
+  const payload = typeof idOrItem === 'string' ? data : idOrItem;
   try {
-    await setDoc(doc(db, colName, id), data);
+    await setDoc(doc(db, colName, id), payload);
   } catch (e) {
     handleFirestoreError(e, OperationType.WRITE, `${colName}/${id}`);
   }
