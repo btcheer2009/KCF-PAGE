@@ -158,6 +158,23 @@ export function listenCollection<T>(
 }
 
 /**
+ * Fetches a single document from a Firestore collection.
+ */
+export async function getItem<T>(colName: string, id: string): Promise<T | null> {
+  try {
+    const docRef = doc(db, colName, id);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return { id: snap.id, ...snap.data() } as T;
+    }
+    return null;
+  } catch (e) {
+    console.error(`Error fetching item ${colName}/${id}:`, e);
+    return null;
+  }
+}
+
+/**
  * Listens to a single Firestore document in real-time.
  * Strictly read-only, does not trigger any seeding.
  */

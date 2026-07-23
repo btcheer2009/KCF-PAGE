@@ -1953,6 +1953,42 @@ export default function App() {
             } 
           />
           <Route 
+            path="/media/photo/:id" 
+            element={
+              <div className="pt-28 md:pt-20">
+                <MediaDetail 
+                  mediaPosts={mediaPosts} 
+                  setMediaPosts={setMediaPosts} 
+                  showToast={showToast} 
+                />
+              </div>
+            } 
+          />
+          <Route 
+            path="/media/video/:id" 
+            element={
+              <div className="pt-28 md:pt-20">
+                <MediaDetail 
+                  mediaPosts={mediaPosts} 
+                  setMediaPosts={setMediaPosts} 
+                  showToast={showToast} 
+                />
+              </div>
+            } 
+          />
+          <Route 
+            path="/media/press/:id" 
+            element={
+              <div className="pt-28 md:pt-20">
+                <MediaDetail 
+                  mediaPosts={mediaPosts} 
+                  setMediaPosts={setMediaPosts} 
+                  showToast={showToast} 
+                />
+              </div>
+            } 
+          />
+          <Route 
             path="/media/:type/:id" 
             element={
               <div className="pt-28 md:pt-20">

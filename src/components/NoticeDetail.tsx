@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Notice } from '../types';
 import { 
-  ArrowLeft, Calendar, Eye, Megaphone, Share2, ChevronLeft, ChevronRight, Image as ImageIcon, X, ZoomIn, Check
+  ArrowLeft, Calendar, Eye, Megaphone, Share2, ChevronLeft, ChevronRight, Image as ImageIcon, X, ZoomIn, Check, RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { getItem } from '../lib/db';
 
 interface NoticeDetailProps {
   notices: Notice[];
@@ -16,27 +17,75 @@ export default function NoticeDetail({ notices, setNotices, showToast }: NoticeD
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
+  const [fetchedNotice, setFetchedNotice] = useState<Notice | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [activeLightboxImage, setActiveLightboxImage] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Find notice in current list
-  const noticeIndex = notices.findIndex(n => String(n.id) === id);
-  const notice = noticeIndex !== -1 ? notices[noticeIndex] : null;
+  // Find notice in current list or fetched doc
+  const noticeInProps = notices.find(n => String(n.id) === String(id));
+  const notice = noticeInProps || fetchedNotice;
 
-  // Previous and Next notices for footer navigation
+  const noticeIndex = notices.findIndex(n => String(n.id) === String(id));
   const prevNotice = noticeIndex > 0 ? notices[noticeIndex - 1] : null;
   const nextNotice = noticeIndex !== -1 && noticeIndex < notices.length - 1 ? notices[noticeIndex + 1] : null;
+
+  // Direct fetch by URL ID if not yet in state
+  useEffect(() => {
+    let isMounted = true;
+
+    const resolveNotice = async () => {
+      if (!id) {
+        setIsLoading(false);
+        return;
+      }
+
+      // 1. If found in notices list
+      const inList = notices.find(n => String(n.id) === String(id));
+      if (inList) {
+        if (isMounted) {
+          setFetchedNotice(inList);
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      // 2. Fetch directly from persistent storage
+      try {
+        const single = await getItem<Notice>('notices', id);
+        if (isMounted) {
+          if (single) {
+            setFetchedNotice(single);
+            setNotices(prev => {
+              if (prev.some(n => String(n.id) === String(id))) return prev;
+              return [...prev, single];
+            });
+          }
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.error('Failed to fetch notice directly:', err);
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    resolveNotice();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id, notices]);
 
   // Increment view count on mount / id change
   useEffect(() => {
     if (notice) {
       const updated = notices.map(n => 
-        String(n.id) === String(notice.id) ? { ...n, views: n.views + 1 } : n
+        String(n.id) === String(notice.id) ? { ...n, views: (n.views || 0) + 1 } : n
       );
       setNotices(updated);
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [id]);
+  }, [id, notice?.id]);
 
   const getCategoryLabel = (category: Notice['category']) => {
     switch (category) {
@@ -75,19 +124,30 @@ export default function NoticeDetail({ notices, setNotices, showToast }: NoticeD
     });
   };
 
+  if (isLoading && !notice) {
+    return (
+      <div className="min-h-[65vh] max-w-4xl mx-auto px-4 py-20 flex flex-col items-center justify-center text-center">
+        <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center mb-4 text-blue-600 animate-spin">
+          <RefreshCw className="w-5 h-5" />
+        </div>
+        <p className="text-xs sm:text-sm font-bold text-zinc-700">공지사항 게시물을 불러오는 중입니다...</p>
+      </div>
+    );
+  }
+
   if (!notice) {
     return (
       <div className="min-h-[65vh] max-w-4xl mx-auto px-4 py-20 flex flex-col items-center justify-center text-center">
         <div className="w-16 h-16 rounded-2xl bg-zinc-100 flex items-center justify-center mb-4 text-zinc-400">
           <Megaphone className="w-8 h-8" />
         </div>
-        <h2 className="text-2xl font-extrabold text-zinc-900 mb-2">게시글을 찾을 수 없습니다</h2>
-        <p className="text-sm text-zinc-500 mb-8 max-w-md">
+        <h2 className="text-xl sm:text-2xl font-extrabold text-zinc-900 mb-2">존재하지 않거나 삭제된 게시물입니다.</h2>
+        <p className="text-xs sm:text-sm text-zinc-500 mb-8 max-w-md">
           요청하신 공지사항이 존재하지 않거나 삭제되었을 수 있습니다.
         </p>
         <button
           onClick={() => navigate('/notice')}
-          className="bg-zinc-900 text-white font-semibold text-xs px-6 py-3 rounded-full hover:bg-zinc-800 transition shadow-sm flex items-center gap-2 cursor-pointer"
+          className="bg-zinc-900 text-white font-semibold text-xs px-6 py-3 rounded-full hover:bg-zinc-800 transition shadow-xs flex items-center gap-2 cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           공지사항 목록으로 돌아가기

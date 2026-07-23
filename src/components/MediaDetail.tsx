@@ -3,9 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { MediaPost } from '../types';
 import { 
   ArrowLeft, Calendar, Eye, Share2, ChevronLeft, ChevronRight, Image as ImageIcon,
-  X, ZoomIn, Check, Film, Newspaper, Camera, ExternalLink, Download, Play, AlertCircle
+  X, ZoomIn, Check, Film, Newspaper, Camera, ExternalLink, Download, Play, AlertCircle, RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { getItem } from '../lib/db';
 
 interface MediaDetailProps {
   mediaPosts: MediaPost[];
@@ -17,29 +18,77 @@ export default function MediaDetail({ mediaPosts, setMediaPosts, showToast }: Me
   const { id, type } = useParams<{ id: string; type?: string }>();
   const navigate = useNavigate();
 
+  const [fetchedPost, setFetchedPost] = useState<MediaPost | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [activeLightboxImage, setActiveLightboxImage] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Find media post
-  const postIndex = mediaPosts.findIndex(p => String(p.id) === id);
-  const post = postIndex !== -1 ? mediaPosts[postIndex] : null;
+  // Find media post from props or fetched single doc
+  const postInProps = mediaPosts.find(p => String(p.id) === String(id));
+  const post = postInProps || fetchedPost;
 
   // Filter same category for Prev / Next navigation
   const sameCategoryPosts = mediaPosts.filter(p => !post || p.type === post.type);
-  const categoryIndex = sameCategoryPosts.findIndex(p => String(p.id) === id);
+  const categoryIndex = sameCategoryPosts.findIndex(p => String(p.id) === String(id));
   const prevPost = categoryIndex > 0 ? sameCategoryPosts[categoryIndex - 1] : null;
   const nextPost = categoryIndex !== -1 && categoryIndex < sameCategoryPosts.length - 1 ? sameCategoryPosts[categoryIndex + 1] : null;
+
+  // Direct fetch by URL ID if not yet in state
+  useEffect(() => {
+    let isMounted = true;
+
+    const resolvePost = async () => {
+      if (!id) {
+        setIsLoading(false);
+        return;
+      }
+
+      // 1. If found in mediaPosts list
+      const inList = mediaPosts.find(p => String(p.id) === String(id));
+      if (inList) {
+        if (isMounted) {
+          setFetchedPost(inList);
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      // 2. Fetch directly from persistent storage (Firestore)
+      try {
+        const single = await getItem<MediaPost>('media_posts', id);
+        if (isMounted) {
+          if (single) {
+            setFetchedPost(single);
+            setMediaPosts(prev => {
+              if (prev.some(p => String(p.id) === String(id))) return prev;
+              return [...prev, single];
+            });
+          }
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.error('Failed to fetch media post directly from storage:', err);
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    resolvePost();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id, mediaPosts]);
 
   // Increment view count on mount / id change
   useEffect(() => {
     if (post) {
       const updated = mediaPosts.map(p => 
-        String(p.id) === String(post.id) ? { ...p, views: p.views + 1 } : p
+        String(p.id) === String(post.id) ? { ...p, views: (p.views || 0) + 1 } : p
       );
       setMediaPosts(updated);
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [id]);
+  }, [id, post?.id]);
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href).then(() => {
@@ -103,19 +152,30 @@ export default function MediaDetail({ mediaPosts, setMediaPosts, showToast }: Me
     }
   };
 
+  if (isLoading && !post) {
+    return (
+      <div className="min-h-[65vh] max-w-4xl mx-auto px-4 py-20 flex flex-col items-center justify-center text-center">
+        <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center mb-4 text-blue-600 animate-spin">
+          <RefreshCw className="w-5 h-5" />
+        </div>
+        <p className="text-xs sm:text-sm font-bold text-zinc-700">미디어 게시물을 불러오는 중입니다...</p>
+      </div>
+    );
+  }
+
   if (!post) {
     return (
       <div className="min-h-[65vh] max-w-4xl mx-auto px-4 py-20 flex flex-col items-center justify-center text-center">
         <div className="w-16 h-16 rounded-2xl bg-zinc-100 flex items-center justify-center mb-4 text-zinc-400">
           <Film className="w-8 h-8" />
         </div>
-        <h2 className="text-2xl font-extrabold text-zinc-900 mb-2">미디어 게시글을 찾을 수 없습니다</h2>
-        <p className="text-sm text-zinc-500 mb-8 max-w-md">
-          요청하신 미디어 자료가 존재하지 않거나 삭제되었을 수 있습니다.
+        <h2 className="text-xl sm:text-2xl font-extrabold text-zinc-900 mb-2">존재하지 않거나 삭제된 미디어 게시물입니다.</h2>
+        <p className="text-xs sm:text-sm text-zinc-500 mb-8 max-w-md">
+          요청하신 미디어 자료가 존재하지 않거나 관리자에 의해 삭제되었을 수 있습니다.
         </p>
         <button
-          onClick={() => navigate('/media/photo')}
-          className="bg-zinc-900 text-white font-semibold text-xs px-6 py-3 rounded-full hover:bg-zinc-800 transition shadow-sm flex items-center gap-2 cursor-pointer"
+          onClick={() => navigate('/media')}
+          className="bg-zinc-900 text-white font-semibold text-xs px-6 py-3 rounded-full hover:bg-zinc-800 transition shadow-xs flex items-center gap-2 cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           미디어 목록으로 돌아가기
