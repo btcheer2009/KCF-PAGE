@@ -3,6 +3,38 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+export interface MediaPost {
+  id: string;
+  type: 'photo' | 'video' | 'press';
+  title: string;
+  date: string;
+  views: number;
+  isImportant?: boolean;
+  content?: string;
+  
+  // Common Optional Properties
+  isPublished?: boolean;
+  publicId?: string;
+  thumbnailPublicId?: string;
+
+  // Photo Gallery Specific
+  coverImage?: string;
+  images?: string[];
+
+  // Video Specific
+  thumbnail?: string;
+  videoUrl?: string;
+  videoUrls?: string[];
+  videoType?: 'youtube' | 'vimeo' | 'mp4' | 'cloudinary' | 'auto';
+  videoDescription?: string;
+
+  // Press Specific
+  pressName?: string;
+  originalUrl?: string;
+  attachmentUrl?: string;
+  summary?: string;
+}
+
 export interface Notice {
   id: string;
   category: 'competition' | 'education' | 'selection' | 'general' | 'admin';
@@ -11,6 +43,9 @@ export interface Notice {
   date: string;
   views: number;
   isImportant?: boolean;
+  images?: string[];
+  imageUrls?: string[];
+  imageUrl?: string;
 }
 
 export interface CheerTeam {

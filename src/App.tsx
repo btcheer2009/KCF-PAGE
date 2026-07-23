@@ -4,23 +4,31 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Calendar, MapPin, ArrowUpRight, Menu, X, Trophy, ShieldCheck, Award, 
   Activity, Sparkles, TrendingUp, Heart, Info, ArrowRight, CheckCircle, Flame,
   Database, Settings, Plus, Trash2, Edit, Inbox, Users, User, Megaphone, ShieldAlert, RefreshCw,
-  Image as ImageIcon, Lock, UserCheck, Upload, Type, Building2, Globe, Trash, Save
+  Image as ImageIcon, Lock, UserCheck, Upload, Type, Building2, Globe, Trash, Save,
+  Camera, Film, Newspaper, LogOut, KeyRound, Eye, EyeOff
 } from 'lucide-react';
 
 import NoticeBoard from './components/NoticeBoard';
+import NoticeDetail from './components/NoticeDetail';
 import TeamRegistry from './components/TeamRegistry';
 import InquiryHub from './components/InquiryHub';
 import AthleteLookup from './components/AthleteLookup';
 import CompetitionBoard from './components/CompetitionBoard';
 import ScheduleCalendar from './components/ScheduleCalendar';
 import DonationDisclosure from './components/DonationDisclosure';
-import { EVENTS, INITIAL_NOTICES, INITIAL_TEAMS, INITIAL_ATHLETES, INITIAL_ASSOCIATION_INFO, INITIAL_COMPETITIONS, INITIAL_DONATION_RECORDS } from './data';
-import { Notice, CheerTeam, InquirySubmission, KCFEvent, Athlete, AssociationInfo, CompetitionPost, DonationRecord, HomepageContent, RelatedLink } from './types';
+import MediaGallery from './components/MediaGallery';
+import MediaDetail from './components/MediaDetail';
+import AdminMediaManager from './components/AdminMediaManager';
+import AdminSettingsManager from './components/AdminSettingsManager';
+import { hashPassword } from './lib/cryptoUtils';
+import { EVENTS, INITIAL_NOTICES, INITIAL_TEAMS, INITIAL_ATHLETES, INITIAL_ASSOCIATION_INFO, INITIAL_COMPETITIONS, INITIAL_DONATION_RECORDS, INITIAL_MEDIA_POSTS } from './data';
+import { Notice, CheerTeam, InquirySubmission, KCFEvent, Athlete, AssociationInfo, CompetitionPost, DonationRecord, HomepageContent, RelatedLink, MediaPost } from './types';
 import { listenCollection, listenDoc, saveItem, deleteItem, saveDoc, seedInitialCollection, seedInitialDoc, uploadFileToStorage } from './lib/db';
 
 
@@ -303,6 +311,7 @@ export default function App() {
   const [associationInfo, rawSetAssociationInfo] = useState<AssociationInfo>(getInitialAssociationInfo);
   const [competitions, rawSetCompetitions] = useState<CompetitionPost[]>([]);
   const [donations, rawSetDonations] = useState<DonationRecord[]>([]);
+  const [mediaPosts, rawSetMediaPosts] = useState<MediaPost[]>(INITIAL_MEDIA_POSTS);
 
   // Helper function to sync array collections with Firestore
   const syncCollectionToFirestore = async <T extends { id: string }>(
@@ -404,6 +413,16 @@ export default function App() {
     });
   };
 
+  const setMediaPosts = (action: React.SetStateAction<MediaPost[]>) => {
+    rawSetMediaPosts((prev) => {
+      const next = typeof action === 'function' ? (action as any)(prev) : action;
+      setTimeout(() => {
+        syncCollectionToFirestore('media_posts', next, prev);
+      }, 0);
+      return next;
+    });
+  };
+
   const setSiteImages = (action: React.SetStateAction<typeof DEFAULT_IMAGES>) => {
     rawSetSiteImages((prev) => {
       const next = typeof action === 'function' ? (action as any)(prev) : action;
@@ -469,16 +488,6 @@ export default function App() {
     });
   };
 
-  const setAdminPassword = (action: React.SetStateAction<string>) => {
-    rawSetAdminPassword((prev) => {
-      const next = typeof action === 'function' ? (action as any)(prev) : action;
-      setTimeout(() => {
-        debouncedSaveDoc('settings', 'admin_config', { password: next }, 800);
-      }, 0);
-      return next;
-    });
-  };
-
   const setTeamCategories = (action: React.SetStateAction<{ id: string; label: string }[]>) => {
     rawSetTeamCategories((prev) => {
       const next = typeof action === 'function' ? (action as any)(prev) : action;
@@ -525,10 +534,39 @@ export default function App() {
   };
 
 
-  const [currentTab, setCurrentTab] = useState<'home' | 'schedule' | 'competitions' | 'teams' | 'athletes' | 'notice' | 'contact' | 'donations'>('home');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [currentTab, setCurrentTab] = useState<'home' | 'schedule' | 'competitions' | 'teams' | 'athletes' | 'notice' | 'media' | 'contact' | 'donations'>('home');
 
-  const handleTabChange = (tab: 'home' | 'schedule' | 'competitions' | 'teams' | 'athletes' | 'notice' | 'contact' | 'donations') => {
+  useEffect(() => {
+    const path = location.pathname;
+    if (path === '/' || path === '/home') {
+      setCurrentTab('home');
+    } else if (path.startsWith('/schedule')) {
+      setCurrentTab('schedule');
+    } else if (path.startsWith('/competitions')) {
+      setCurrentTab('competitions');
+    } else if (path.startsWith('/teams')) {
+      setCurrentTab('teams');
+    } else if (path.startsWith('/athletes')) {
+      setCurrentTab('athletes');
+    } else if (path.startsWith('/notice') || path.startsWith('/board')) {
+      setCurrentTab('notice');
+    } else if (path.startsWith('/media')) {
+      setCurrentTab('media');
+    } else if (path.startsWith('/contact')) {
+      setCurrentTab('contact');
+    } else if (path.startsWith('/donations')) {
+      setCurrentTab('donations');
+    }
+  }, [location.pathname]);
+
+  const handleTabChange = (tab: 'home' | 'schedule' | 'competitions' | 'teams' | 'athletes' | 'notice' | 'media' | 'contact' | 'donations') => {
     setCurrentTab(tab);
+    const targetPath = tab === 'home' ? '/' : tab === 'media' ? '/media/photo' : `/${tab}`;
+    if (location.pathname !== targetPath) {
+      navigate(targetPath);
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   
@@ -580,20 +618,135 @@ export default function App() {
   const [newNoticeCategory, setNewNoticeCategory] = useState<'competition' | 'education' | 'selection' | 'general' | 'admin'>('general');
   const [newNoticeContent, setNewNoticeContent] = useState('');
   const [newNoticeIsImportant, setNewNoticeIsImportant] = useState(false);
+  const [newNoticeImages, setNewNoticeImages] = useState<string[]>([]);
+  const [isNoticeUploading, setIsNoticeUploading] = useState<boolean>(false);
 
   // Admin Security States
-  const [adminPassword, rawSetAdminPassword] = useState('bt2009');
+  const [adminPasswordHash, setAdminPasswordHash] = useState<string>('');
+  const [failedAttempts, setFailedAttempts] = useState<number>(0);
+  const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
+  const [lockoutRemaining, setLockoutRemaining] = useState<number>(0);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [pendingAdminAction, setPendingAdminAction] = useState<(() => void) | null>(null);
  
   // Admin Panel states
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [showAdminDashboardModal, setShowAdminDashboardModal] = useState(false);
-  const [adminActiveTab, setAdminActiveTab] = useState<'stats' | 'notices' | 'teams' | 'inquiries' | 'schedules' | 'images' | 'athletes' | 'association' | 'competitions' | 'headers' | 'donations' | 'homepage'>('stats');
+  const [adminActiveTab, setAdminActiveTab] = useState<'stats' | 'notices' | 'media' | 'teams' | 'inquiries' | 'schedules' | 'images' | 'athletes' | 'association' | 'competitions' | 'headers' | 'donations' | 'homepage' | 'settings'>('stats');
   const [inquiryFilter, setInquiryFilter] = useState<'all' | 'contact' | 'team_reg'>('all');
+
+  // Load and listen to Admin Security Password Hash
+  useEffect(() => {
+    const initAdminPassword = async () => {
+      const localHash = localStorage.getItem('kcf_admin_pw_hash');
+      if (localHash) {
+        setAdminPasswordHash(localHash);
+      } else {
+        const defaultHash = await hashPassword('bt2009');
+        setAdminPasswordHash(defaultHash);
+      }
+    };
+
+    initAdminPassword();
+
+    const unsub = listenDoc<{ hash?: string }>('settings', 'admin_security', (doc) => {
+      if (doc && doc.hash) {
+        setAdminPasswordHash(doc.hash);
+        try {
+          localStorage.setItem('kcf_admin_pw_hash', doc.hash);
+        } catch (e) {
+          console.error('Failed to set kcf_admin_pw_hash in localStorage:', e);
+        }
+      }
+    });
+
+    return () => {
+      unsub();
+    };
+  }, []);
+
+  // Handle countdown timer for failed login lockout
+  useEffect(() => {
+    if (!lockoutUntil) {
+      setLockoutRemaining(0);
+      return;
+    }
+
+    const updateRemaining = () => {
+      const now = Date.now();
+      if (now >= lockoutUntil) {
+        setLockoutUntil(null);
+        setLockoutRemaining(0);
+        setFailedAttempts(0);
+      } else {
+        setLockoutRemaining(Math.ceil((lockoutUntil - now) / 1000));
+      }
+    };
+
+    updateRemaining();
+    const interval = setInterval(updateRemaining, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutUntil]);
+
+  const handleUpdateAdminPasswordHash = async (newHash: string) => {
+    setAdminPasswordHash(newHash);
+    try {
+      localStorage.setItem('kcf_admin_pw_hash', newHash);
+    } catch (e) {
+      console.error('Failed to save kcf_admin_pw_hash in localStorage:', e);
+    }
+    await saveDoc('settings', 'admin_security', { hash: newHash });
+  };
+
+  const handleAdminLogout = () => {
+    setIsUnlocked(false);
+    setShowAdminDashboardModal(false);
+    showToast('관리자 시스템에서 로그아웃되었습니다.', 'info');
+  };
+
+  const handleAdminLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (lockoutUntil && Date.now() < lockoutUntil) {
+      setPasswordError(`로그인 시도 횟수가 초과되었습니다. ${lockoutRemaining}초 후 다시 시도해 주세요.`);
+      return;
+    }
+
+    if (!passwordInput.trim()) {
+      setPasswordError('비밀번호를 입력해 주세요.');
+      return;
+    }
+
+    const inputHash = await hashPassword(passwordInput);
+    if (inputHash === adminPasswordHash) {
+      setIsUnlocked(true);
+      setShowPasswordPrompt(false);
+      setPasswordInput('');
+      setPasswordError('');
+      setFailedAttempts(0);
+      setLockoutUntil(null);
+      if (pendingAdminAction) {
+        pendingAdminAction();
+        setPendingAdminAction(null);
+      }
+      showToast('관리자 인증에 성공하였습니다.', 'success');
+    } else {
+      const nextFailed = failedAttempts + 1;
+      setFailedAttempts(nextFailed);
+      if (nextFailed >= 5) {
+        const until = Date.now() + 30000;
+        setLockoutUntil(until);
+        setLockoutRemaining(30);
+        setPasswordError('비밀번호 5회 이상 올바르지 않습니다. 30초 후 다시 시도해 주세요.');
+      } else {
+        setPasswordError(`비밀번호가 올바르지 않습니다. (${nextFailed}/5회 실패)`);
+      }
+    }
+  };
 
   const adminActiveTabRef = React.useRef(adminActiveTab);
   useEffect(() => {
@@ -831,6 +984,7 @@ export default function App() {
         seedInitialCollection<Athlete>('athletes', INITIAL_ATHLETES),
         seedInitialCollection<CompetitionPost>('competitions', INITIAL_COMPETITIONS),
         seedInitialCollection<DonationRecord>('donations', INITIAL_DONATION_RECORDS),
+        seedInitialCollection<MediaPost>('media_posts', INITIAL_MEDIA_POSTS),
         seedInitialDoc<typeof DEFAULT_IMAGES>('settings', 'site_images', DEFAULT_IMAGES),
         seedInitialDoc<typeof DEFAULT_CATEGORY_HEADERS>('settings', 'category_headers', DEFAULT_CATEGORY_HEADERS),
         seedInitialDoc<{ list: typeof DEFAULT_CORE_PROMISES }>('settings', 'core_promises', { list: DEFAULT_CORE_PROMISES }),
@@ -897,6 +1051,14 @@ export default function App() {
     // 6.5. Donations
     const unsubscribeDonations = listenCollection<DonationRecord>('donations', (data) => {
       rawSetDonations(data);
+    });
+
+    // 6.6. Media Posts
+    const unsubscribeMediaPosts = listenCollection<MediaPost>('media_posts', (data) => {
+      if (data && data.length > 0) {
+        const sorted = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        rawSetMediaPosts(sorted);
+      }
     });
 
     // 7. Site Images
@@ -1003,10 +1165,10 @@ export default function App() {
       setIsDbConnected(false);
     });
 
-    // 11. Admin Password
-    const unsubscribePassword = listenDoc<{ password: string }>('settings', 'admin_config', (data) => {
-      if (data && data.password) {
-        rawSetAdminPassword(data.password);
+    // 11. Admin Security Password
+    const unsubscribePassword = listenDoc<{ hash?: string }>('settings', 'admin_security', (data) => {
+      if (data && data.hash) {
+        setAdminPasswordHash(data.hash);
       }
     });
 
@@ -1039,6 +1201,7 @@ export default function App() {
       unsubscribeAthletes();
       unsubscribeCompetitions();
       unsubscribeDonations();
+      unsubscribeMediaPosts();
       unsubscribeImages();
       unsubscribeIndividualImages.forEach((unsub) => unsub());
       unsubscribeHeaders();
@@ -1130,6 +1293,48 @@ export default function App() {
     );
   };
 
+  const handleNoticeImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const fileList = Array.from(files);
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/gif'];
+
+    for (const file of fileList) {
+      const fileType = file.type.toLowerCase();
+      const fileExt = file.name.split('.').pop()?.toLowerCase();
+      if (!allowedTypes.includes(fileType) && !['jpg', 'png', 'webp', 'jpeg', 'gif'].includes(fileExt || '')) {
+        showToast(`지원하지 않는 이미지 형식입니다. (${file.name})`, 'error');
+        continue;
+      }
+      if (file.size > 15 * 1024 * 1024) {
+        showToast(`파일 용량이 15MB를 초과합니다. (${file.name})`, 'error');
+        continue;
+      }
+
+      try {
+        setIsNoticeUploading(true);
+        showToast(`${file.name} 이미지 Cloudinary 업로드 중...`, 'info');
+        const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const pathStr = `notices/${Date.now()}_${safeFileName}`;
+        const downloadUrl = await uploadFileToStorage(pathStr, file);
+        setNewNoticeImages((prev) => [...prev, downloadUrl]);
+        showToast('이미지가 성공적으로 업로드되었습니다!', 'success');
+      } catch (err: any) {
+        console.error('Notice image upload failed:', err);
+        showToast(`이미지 업로드 실패: ${err.message || String(err)}`, 'error');
+      } finally {
+        setIsNoticeUploading(false);
+      }
+    }
+    e.target.value = '';
+  };
+
+  const handleRemoveNoticeImage = (indexToRemove: number) => {
+    setNewNoticeImages((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+    showToast('첨부 이미지 파일이 삭제되었습니다.', 'info');
+  };
+
   const handleAddNoticeFromAdmin = () => {
     if (!newNoticeTitle.trim() || !newNoticeContent.trim()) {
       showToast('공지 제목과 내용을 모두 입력해 주세요.', 'error');
@@ -1143,7 +1348,10 @@ export default function App() {
       content: newNoticeContent,
       date: adminEditingNotice ? adminEditingNotice.date : todayStr,
       views: adminEditingNotice ? adminEditingNotice.views : 1,
-      isImportant: newNoticeIsImportant
+      isImportant: newNoticeIsImportant,
+      images: newNoticeImages,
+      imageUrls: newNoticeImages,
+      imageUrl: newNoticeImages[0] || ''
     };
 
     let updated: Notice[];
@@ -1162,6 +1370,7 @@ export default function App() {
     setNewNoticeCategory('general');
     setNewNoticeContent('');
     setNewNoticeIsImportant(false);
+    setNewNoticeImages([]);
     setAdminEditingNotice(null);
     setShowAddNoticeForm(false);
   };
@@ -1336,8 +1545,9 @@ export default function App() {
     }));
   };
 
-  const handleUpdatePassword = (newPass: string) => {
-    setAdminPassword(newPass);
+  const handleUpdatePassword = async (newPass: string) => {
+    const newHash = await hashPassword(newPass);
+    await handleUpdateAdminPasswordHash(newHash);
   };
 
   const triggerAdminAction = (action: () => void) => {
@@ -1495,6 +1705,17 @@ export default function App() {
             <span className="whitespace-nowrap">새 소식</span>
           </button>
           <button
+            onClick={() => handleTabChange('media')}
+            className={`flex items-center gap-1 lg:gap-1.5 px-1.5 py-1.5 lg:px-2.5 rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap ${
+              currentTab === 'media' 
+                ? 'bg-blue-600/10 text-blue-600 font-extrabold' 
+                : 'text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100'
+            }`}
+          >
+            <Film className="w-3.5 h-3.5 shrink-0" />
+            <span className="whitespace-nowrap">미디어</span>
+          </button>
+          <button
             onClick={() => handleTabChange('contact')}
             className={`flex items-center gap-1 lg:gap-1.5 px-1.5 py-1.5 lg:px-2.5 rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap ${
               currentTab === 'contact' 
@@ -1607,6 +1828,17 @@ export default function App() {
           <span>새 소식</span>
         </button>
         <button
+          onClick={() => handleTabChange('media')}
+          className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+            currentTab === 'media' 
+              ? 'bg-blue-600 text-white shadow-xs' 
+              : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+          }`}
+        >
+          <Film className="w-3 h-3" />
+          <span>미디어</span>
+        </button>
+        <button
           onClick={() => handleTabChange('contact')}
           className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
             currentTab === 'contact' 
@@ -1646,6 +1878,7 @@ export default function App() {
               <button onClick={() => { handleTabChange('teams'); setMobileMenuOpen(false); }} className={`text-left hover:text-blue-700 transition cursor-pointer ${currentTab === 'teams' ? 'text-blue-600 font-bold' : ''}`}>전국 가입팀 검색 (Teams)</button>
               <button onClick={() => { handleTabChange('athletes'); setMobileMenuOpen(false); }} className={`text-left hover:text-blue-700 transition cursor-pointer ${currentTab === 'athletes' ? 'text-blue-600 font-bold' : ''}`}>공인선수 조회 (Athletes)</button>
               <button onClick={() => { handleTabChange('notice'); setMobileMenuOpen(false); }} className={`text-left hover:text-blue-700 transition cursor-pointer ${currentTab === 'notice' ? 'text-blue-600 font-bold' : ''}`}>새 공지사항 (Notice)</button>
+              <button onClick={() => { handleTabChange('media'); setMobileMenuOpen(false); }} className={`text-left hover:text-blue-700 transition cursor-pointer ${currentTab === 'media' ? 'text-blue-600 font-bold' : ''}`}>미디어 자료실 (Media)</button>
               <button onClick={() => { handleTabChange('contact'); setMobileMenuOpen(false); }} className={`text-left hover:text-blue-700 transition cursor-pointer ${currentTab === 'contact' ? 'text-blue-600 font-bold' : ''}`}>사무국 접수처 (Contact)</button>
               <button onClick={() => { handleTabChange('donations'); setMobileMenuOpen(false); }} className={`text-left hover:text-blue-700 transition cursor-pointer ${currentTab === 'donations' ? 'text-blue-600 font-bold' : ''}`}>연간 기부금 공개 실적 (Donations)</button>
             </div>
@@ -1664,8 +1897,92 @@ export default function App() {
       </AnimatePresence>
 
       <main className="min-h-screen">
-        <AnimatePresence mode="wait">
-          {currentTab === 'home' && (
+        <Routes>
+          <Route 
+            path="/board/:id" 
+            element={
+              <div className="pt-28 md:pt-20">
+                <NoticeDetail 
+                  notices={notices} 
+                  setNotices={setNotices} 
+                  showToast={showToast} 
+                />
+              </div>
+            } 
+          />
+          <Route 
+            path="/notice/:id" 
+            element={
+              <div className="pt-28 md:pt-20">
+                <NoticeDetail 
+                  notices={notices} 
+                  setNotices={setNotices} 
+                  showToast={showToast} 
+                />
+              </div>
+            } 
+          />
+          <Route 
+            path="/media/photo" 
+            element={
+              <div className="pt-28 md:pt-20">
+                <MediaGallery mediaPosts={mediaPosts} initialType="photo" />
+              </div>
+            } 
+          />
+          <Route 
+            path="/media/video" 
+            element={
+              <div className="pt-28 md:pt-20">
+                <MediaGallery mediaPosts={mediaPosts} initialType="video" />
+              </div>
+            } 
+          />
+          <Route 
+            path="/media/press" 
+            element={
+              <div className="pt-28 md:pt-20">
+                <MediaGallery mediaPosts={mediaPosts} initialType="press" />
+              </div>
+            } 
+          />
+          <Route 
+            path="/media" 
+            element={
+              <div className="pt-28 md:pt-20">
+                <MediaGallery mediaPosts={mediaPosts} initialType="all" />
+              </div>
+            } 
+          />
+          <Route 
+            path="/media/:type/:id" 
+            element={
+              <div className="pt-28 md:pt-20">
+                <MediaDetail 
+                  mediaPosts={mediaPosts} 
+                  setMediaPosts={setMediaPosts} 
+                  showToast={showToast} 
+                />
+              </div>
+            } 
+          />
+          <Route 
+            path="/media/:id" 
+            element={
+              <div className="pt-28 md:pt-20">
+                <MediaDetail 
+                  mediaPosts={mediaPosts} 
+                  setMediaPosts={setMediaPosts} 
+                  showToast={showToast} 
+                />
+              </div>
+            } 
+          />
+          <Route 
+            path="*" 
+            element={
+              <AnimatePresence mode="wait">
+                {currentTab === 'home' && (
             <motion.div
               key="home"
               initial={{ opacity: 0, y: 15 }}
@@ -2242,7 +2559,25 @@ export default function App() {
               </section>
             </motion.div>
           )}
+
+          {currentTab === 'media' && (
+            <motion.div
+              key="media"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.35 }}
+              className="pt-36 md:pt-24"
+            >
+              <section id="media" className="py-24 px-4 sm:px-6 lg:px-16 bg-white">
+                <MediaGallery mediaPosts={mediaPosts} initialType="all" />
+              </section>
+            </motion.div>
+          )}
         </AnimatePresence>
+            } 
+          />
+        </Routes>
       </main>
 
       {/* 10. Footer Section */}
@@ -2422,14 +2757,26 @@ export default function App() {
               exit={{ scale: 0.95, y: 30, opacity: 0 }}
               className="relative bg-white border border-zinc-200 rounded-3xl p-5 md:p-8 max-w-7xl w-full mx-4 md:mx-8 max-h-[92vh] overflow-hidden shadow-2xl z-10 flex flex-col"
             >
-              {/* Close Button */}
-              <button
-                id="close-admin-dashboard"
-                onClick={() => setShowAdminDashboardModal(false)}
-                className="absolute top-6 right-6 p-2 rounded-full border border-zinc-200 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-50 transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              {/* Close and Logout Buttons */}
+              <div className="absolute top-5 right-5 sm:top-6 sm:right-6 flex items-center gap-2">
+                <button
+                  id="admin-logout-top-btn"
+                  onClick={handleAdminLogout}
+                  className="px-3 py-1.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                  title="관리자 로그아웃"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>로그아웃</span>
+                </button>
+                <button
+                  id="close-admin-dashboard"
+                  onClick={() => setShowAdminDashboardModal(false)}
+                  className="p-2 rounded-full border border-zinc-200 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-50 transition cursor-pointer"
+                  title="제어 센터 닫기"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
               {/* Header */}
               <div className="mb-6 flex items-center gap-3">
@@ -2469,6 +2816,7 @@ export default function App() {
                     {[
                       { id: 'stats', label: '종합 요약', icon: Activity },
                       { id: 'notices', label: '공지 관리', icon: Megaphone },
+                      { id: 'media', label: '미디어 관리', icon: Film },
                       { id: 'teams', label: '등록팀 관리', icon: Users },
                       { id: 'inquiries', label: '문의 관리인 박스', icon: Inbox },
                       { id: 'schedules', label: '일정 관리', icon: Calendar },
@@ -2479,6 +2827,7 @@ export default function App() {
                       { id: 'headers', label: '안내문구 & 핵심약속', icon: Type },
                       { id: 'homepage', label: '홈페이지 관리', icon: Globe },
                       { id: 'association', label: '협회 정보 관리', icon: Settings },
+                      { id: 'settings', label: '환경설정', icon: ShieldCheck },
                     ].map(tab => {
                       const Icon = tab.icon;
                       const isActive = adminActiveTab === tab.id;
@@ -2566,6 +2915,7 @@ export default function App() {
                             setNewNoticeContent('');
                             setNewNoticeCategory('general');
                             setNewNoticeIsImportant(false);
+                            setNewNoticeImages([]);
                           } else {
                             setShowAddNoticeForm(true);
                             setAdminEditingNotice(null);
@@ -2573,6 +2923,7 @@ export default function App() {
                             setNewNoticeContent('');
                             setNewNoticeCategory('general');
                             setNewNoticeIsImportant(false);
+                            setNewNoticeImages([]);
                           }
                         }}
                         className="text-xs bg-zinc-900 text-white font-semibold px-4 py-1.5 rounded-full hover:bg-zinc-800 transition flex items-center gap-1 cursor-pointer"
@@ -2634,6 +2985,53 @@ export default function App() {
                               />
                             </div>
 
+                            {/* Multi-Photo Upload Field */}
+                            <div className="space-y-2 pt-2 border-t border-zinc-200">
+                              <div className="flex items-center justify-between flex-wrap gap-2">
+                                <label className="text-[10px] text-zinc-600 font-bold flex items-center gap-1">
+                                  <ImageIcon className="w-3.5 h-3.5 text-blue-600" />
+                                  첨부 사진 등록 (여러 장 업로드 가능)
+                                </label>
+                                <label className={`cursor-pointer inline-flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-[11px] font-semibold px-3 py-1.5 rounded-xl transition ${isNoticeUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                  <Upload className="w-3.5 h-3.5" />
+                                  {isNoticeUploading ? 'Cloudinary 업로드 중...' : '사진 파일 추가'}
+                                  <input
+                                    type="file"
+                                    multiple
+                                    accept="image/*"
+                                    disabled={isNoticeUploading}
+                                    onChange={handleNoticeImageUpload}
+                                    className="hidden"
+                                  />
+                                </label>
+                              </div>
+
+                              {newNoticeImages.length > 0 ? (
+                                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5 p-3 bg-white border border-zinc-200 rounded-xl">
+                                  {newNoticeImages.map((imgUrl, imgIdx) => (
+                                    <div key={imgIdx} className="relative group rounded-lg overflow-hidden border border-zinc-200 aspect-square bg-zinc-100 shadow-xs">
+                                      <img src={imgUrl} alt={`첨부 이미지 ${imgIdx + 1}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveNoticeImage(imgIdx)}
+                                        className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-95 hover:opacity-100 hover:bg-red-700 transition shadow cursor-pointer"
+                                        title="사진 삭제"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                      <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[9px] px-1 rounded font-mono font-medium">
+                                        #{imgIdx + 1}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-[11px] text-zinc-400 font-light italic">
+                                  등록된 사진이 없습니다. [사진 파일 추가] 버튼을 눌러 사진을 첨부할 수 있습니다.
+                                </p>
+                              )}
+                            </div>
+
                             <div className="flex items-center gap-2">
                               <input
                                 id="admin-notice-important"
@@ -2656,6 +3054,7 @@ export default function App() {
                                   setNewNoticeContent('');
                                   setNewNoticeCategory('general');
                                   setNewNoticeIsImportant(false);
+                                  setNewNoticeImages([]);
                                 }}
                                 className="bg-white border border-zinc-200 text-zinc-700 font-semibold px-4 py-2 rounded-xl text-xs hover:bg-zinc-50 transition cursor-pointer"
                               >
@@ -2709,6 +3108,7 @@ export default function App() {
                                     setNewNoticeContent(notice.content);
                                     setNewNoticeCategory(notice.category);
                                     setNewNoticeIsImportant(!!notice.isImportant);
+                                    setNewNoticeImages(notice.images || notice.imageUrls || (notice.imageUrl ? [notice.imageUrl] : []));
                                     setShowAddNoticeForm(true);
                                   }}
                                   className="bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-700 rounded px-2 py-1 transition text-[10px] font-semibold"
@@ -2736,6 +3136,17 @@ export default function App() {
                       </table>
                     </div>
                   </div>
+                )}
+
+                {/* Media Manager Panel */}
+                {adminActiveTab === 'media' && (
+                  <AdminMediaManager
+                    mediaPosts={mediaPosts}
+                    setMediaPosts={setMediaPosts}
+                    showToast={showToast}
+                    showConfirm={showConfirm}
+                    uploadFileToStorage={uploadFileToStorage}
+                  />
                 )}
 
                 {/* 3. Team Directory Manager Panel */}
@@ -4384,43 +4795,24 @@ export default function App() {
                       ))}
                     </div>
 
-                    {/* Additional Security Section: Changing password */}
+                    {/* Security Section: Redirect to Settings */}
                     <div className="border-t border-zinc-200 pt-6 mt-4">
-                      <div className="bg-zinc-50 border border-zinc-200 rounded-3xl p-5 md:p-6 flex flex-col sm:flex-row justify-between items-center gap-6">
+                      <div className="bg-zinc-50 border border-zinc-200 rounded-3xl p-5 md:p-6 flex flex-col sm:flex-row justify-between items-center gap-4">
                         <div className="space-y-1 text-left">
                           <h5 className="text-xs font-bold text-zinc-900 flex items-center gap-1.5">
-                            <Lock className="w-3.5 h-3.5 text-zinc-600" />
-                            관리자 보안 인증 비밀번호 변경
+                            <ShieldCheck className="w-4 h-4 text-blue-600" />
+                            관리자 보안 인증 및 비밀번호 설정
                           </h5>
-                          <p className="text-[10px] text-zinc-400">초기 패스워드(bt2009) 외에 안전한 비밀번호로 언제든 교체 관리할 수 있습니다.</p>
+                          <p className="text-[10px] text-zinc-400">비밀번호 변경 및 보안 관리는 [환경설정] 메뉴에서 안전하게 수행하실 수 있습니다.</p>
                         </div>
-                        <div className="flex gap-2 w-full sm:w-auto">
-                          <input
-                            type="text"
-                            placeholder="새 비밀번호 입력"
-                            id="change-admin-pass-input"
-                            defaultValue={adminPassword}
-                            onChange={(e) => {
-                              const val = e.target.value.trim();
-                              if (val) {
-                                handleUpdatePassword(val);
-                              }
-                            }}
-                            className="bg-white border border-zinc-200 rounded-xl px-4 py-2.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-900 font-mono w-full sm:w-48"
-                          />
-                          <button
-                            onClick={() => {
-                              const input = document.getElementById('change-admin-pass-input') as HTMLInputElement;
-                              if (input && input.value.trim()) {
-                                handleUpdatePassword(input.value.trim());
-                                alert(`성공적으로 비밀번호가 변경되었습니다! (현재 설정: ${input.value.trim()})`);
-                              }
-                            }}
-                            className="bg-zinc-900 text-white font-semibold text-xs px-5 py-2.5 rounded-xl hover:bg-zinc-800 transition shrink-0 cursor-pointer"
-                          >
-                            비밀번호 변경 완료
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setAdminActiveTab('settings')}
+                          className="bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs px-5 py-2.5 rounded-xl transition shrink-0 cursor-pointer flex items-center gap-1.5"
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
+                          <span>비밀번호 변경 메뉴로 이동</span>
+                        </button>
                       </div>
                     </div>
 
@@ -6481,6 +6873,16 @@ export default function App() {
                   </div>
                 )}
 
+                {/* 14. Settings Panel (환경설정 - 비밀번호 변경) */}
+                {adminActiveTab === 'settings' && (
+                  <AdminSettingsManager
+                    currentPasswordHash={adminPasswordHash}
+                    onUpdatePasswordHash={handleUpdateAdminPasswordHash}
+                    onLogout={handleAdminLogout}
+                    showToast={showToast}
+                  />
+                )}
+
               </div>
 
             </div>
@@ -6488,12 +6890,21 @@ export default function App() {
             {/* Footer */}
               <div className="mt-6 pt-4 border-t border-zinc-200 flex justify-between items-center text-xs text-zinc-400">
                 <span>사단법인 한국치어리딩협회 통합 전산관리센터</span>
-                <button
-                  onClick={() => setShowAdminDashboardModal(false)}
-                  className="bg-zinc-900 text-white font-bold px-5 py-2.5 rounded-full hover:bg-zinc-800 transition cursor-pointer"
-                >
-                  제어 센터 닫기
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleAdminLogout}
+                    className="bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 font-bold px-4 py-2.5 rounded-full text-xs transition cursor-pointer flex items-center gap-1.5"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>로그아웃</span>
+                  </button>
+                  <button
+                    onClick={() => setShowAdminDashboardModal(false)}
+                    className="bg-zinc-900 text-white font-bold px-5 py-2.5 rounded-full hover:bg-zinc-800 transition cursor-pointer"
+                  >
+                    제어 센터 닫기
+                  </button>
+                </div>
               </div>
 
             </motion.div>
@@ -6587,6 +6998,8 @@ export default function App() {
               onClick={() => {
                 setShowPasswordPrompt(false);
                 setPendingAdminAction(null);
+                setPasswordInput('');
+                setPasswordError('');
               }}
             />
             <motion.div
@@ -6600,51 +7013,49 @@ export default function App() {
                   <Lock className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-zinc-900 tracking-tight">관리자 인증 보안 확인</h4>
+                  <h4 className="text-sm font-bold text-zinc-900 tracking-tight">관리자 인증 안내</h4>
                   <p className="text-[10px] text-zinc-400">관리자 기능을 수행하기 위해 비밀번호를 입력해 주세요.</p>
                 </div>
               </div>
 
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (passwordInput === adminPassword) {
-                    setIsUnlocked(true);
-                    setShowPasswordPrompt(false);
-                    if (pendingAdminAction) {
-                      pendingAdminAction();
-                      setPendingAdminAction(null);
-                    }
-                  } else {
-                    setPasswordError('비밀번호가 올바르지 않습니다. 다시 입력해 주세요.');
-                  }
-                }}
-                className="space-y-4"
-              >
+              <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
                 <div className="space-y-1.5">
                   <div className="flex justify-between items-center">
-                    <label className="block text-[11px] text-zinc-500 font-semibold">보안 비밀번호</label>
-                    <span className="text-[10px] text-zinc-400 font-medium">
-                      기본 비밀번호: <code className="bg-zinc-100 px-1 py-0.5 rounded text-blue-600 font-mono">bt2009</code>
-                    </span>
+                    <label className="block text-[11px] text-zinc-500 font-semibold">비밀번호 입력창</label>
                   </div>
-                  <input
-                    type="password"
-                    required
-                    value={passwordInput}
-                    onChange={(e) => {
-                      setPasswordInput(e.target.value);
-                      setPasswordError('');
-                    }}
-                    placeholder="비밀번호를 입력하세요"
-                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl p-3 text-sm text-zinc-800 focus:outline-none focus:border-zinc-900 focus:bg-white transition"
-                    autoFocus
-                  />
-                  {passwordError && (
+                  <div className="relative">
+                    <input
+                      type={showLoginPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      required
+                      disabled={!!(lockoutUntil && Date.now() < lockoutUntil)}
+                      value={passwordInput}
+                      onChange={(e) => {
+                        setPasswordInput(e.target.value);
+                        setPasswordError('');
+                      }}
+                      placeholder="비밀번호를 입력해 주세요"
+                      className="w-full bg-zinc-50 border border-zinc-200 rounded-xl p-3 pr-10 text-sm text-zinc-800 focus:outline-none focus:border-zinc-900 focus:bg-white transition disabled:opacity-50 disabled:bg-zinc-100"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowLoginPassword(!showLoginPassword)}
+                      className="absolute right-3 top-3 text-zinc-400 hover:text-zinc-600 p-0.5 transition cursor-pointer"
+                      title={showLoginPassword ? '비밀번호 숨기기' : '비밀번호 표시'}
+                    >
+                      {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {lockoutUntil && Date.now() < lockoutUntil ? (
+                    <p className="text-[11px] font-bold text-red-600 flex items-center gap-1 bg-red-50 p-2.5 rounded-xl border border-red-200">
+                      ⚠️ 30초 후 다시 시도해 주세요. ({lockoutRemaining}초 남음)
+                    </p>
+                  ) : passwordError ? (
                     <p className="text-[10px] font-semibold text-red-500 flex items-center gap-1">
                       ⚠️ {passwordError}
                     </p>
-                  )}
+                  ) : null}
                 </div>
 
                 <div className="flex gap-2 pt-2">
@@ -6653,14 +7064,17 @@ export default function App() {
                     onClick={() => {
                       setShowPasswordPrompt(false);
                       setPendingAdminAction(null);
+                      setPasswordInput('');
+                      setPasswordError('');
                     }}
                     className="flex-1 px-4 py-2.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 text-zinc-700 rounded-xl text-xs font-semibold transition cursor-pointer"
                   >
-                    인증 취소
+                    취소
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-xs font-semibold transition cursor-pointer"
+                    disabled={!!(lockoutUntil && Date.now() < lockoutUntil)}
+                    className="flex-1 px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-xs font-semibold transition cursor-pointer disabled:opacity-50"
                   >
                     확인 및 인증
                   </button>

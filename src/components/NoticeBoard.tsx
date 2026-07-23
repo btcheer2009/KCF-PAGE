@@ -4,11 +4,11 @@
  */
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Notice } from '../types';
 import { 
-  Search, Megaphone, Calendar, Eye, X
+  Search, Megaphone, Eye, Image as ImageIcon
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
 
 interface NoticeBoardProps {
   notices: Notice[];
@@ -23,27 +23,16 @@ interface NoticeBoardProps {
 
 export default function NoticeBoard({ 
   notices, 
-  setNotices, 
   headerBadge = 'KCF NOTICE BOARD',
   headerTitle = 'KCF 공식 새소식 & 알림마당',
   headerDesc = '대한민국 치어리딩의 주요 소식, 일정 및 행정 사항을 가장 빠르고 정확하게 전달합니다.'
 }: NoticeBoardProps) {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
-
-  // Save helper
-  const saveNotices = (updated: Notice[]) => {
-    setNotices(updated);
-  };
 
   const handleViewNotice = (notice: Notice) => {
-    setSelectedNotice(notice);
-    // Increase view count
-    const updated = notices.map(n => 
-      n.id === notice.id ? { ...n, views: n.views + 1 } : n
-    );
-    saveNotices(updated);
+    navigate(`/board/${notice.id}`);
   };
 
   // Filter logic
@@ -186,6 +175,12 @@ export default function NoticeBoard({
                           {notice.isImportant && (
                             <span className="text-red-500 text-[10px] shrink-0 font-bold">[중요]</span>
                           )}
+                          {((notice.images && notice.images.length > 0) || (notice.imageUrls && notice.imageUrls.length > 0) || notice.imageUrl) && (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded font-mono border border-blue-100 shrink-0">
+                              <ImageIcon className="w-3 h-3" />
+                              {(notice.images?.length || notice.imageUrls?.length || 1)}
+                            </span>
+                          )}
                         </div>
                         <p className="text-[11px] text-zinc-400 font-light line-clamp-1 mt-0.5">
                           {notice.content}
@@ -240,6 +235,12 @@ export default function NoticeBoard({
                       <Eye className="w-3 h-3 text-zinc-300" />
                       조회수 {notice.views}
                     </span>
+                    {((notice.images && notice.images.length > 0) || (notice.imageUrls && notice.imageUrls.length > 0) || notice.imageUrl) && (
+                      <span className="flex items-center gap-1 text-blue-600 font-medium">
+                        <ImageIcon className="w-3 h-3" />
+                        사진 {(notice.images?.length || notice.imageUrls?.length || 1)}장
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -247,71 +248,6 @@ export default function NoticeBoard({
           </div>
         )}
       </div>
-
-      {/* Notice Detail Overlay Modal */}
-      <AnimatePresence>
-        {selectedNotice && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSelectedNotice(null)}
-              className="absolute inset-0"
-            />
-            
-            <motion.div 
-              initial={{ scale: 0.95, y: 20, opacity: 0 }}
-              animate={{ scale: 1, y: 0, opacity: 1 }}
-              exit={{ scale: 0.95, y: 20, opacity: 0 }}
-              className="relative bg-white border border-slate-200 rounded-3xl p-6 md:p-8 max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-2xl z-10"
-            >
-              <button 
-                id="close-notice-detail-btn"
-                onClick={() => setSelectedNotice(null)}
-                className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-
-              <div className="space-y-4 text-slate-900">
-                <div className="flex items-center gap-2">
-                  <span className={`text-[10px] px-2.5 py-1 rounded font-medium ${getCategoryColor(selectedNotice.category)}`}>
-                    {getCategoryLabel(selectedNotice.category)}
-                  </span>
-                  <span className="text-xs text-slate-500 flex items-center gap-1">
-                    <Calendar className="w-3 h-3" />
-                    {selectedNotice.date}
-                  </span>
-                  <span className="text-xs text-slate-500 flex items-center gap-1">
-                    <Eye className="w-3 h-3" />
-                    조회수 {selectedNotice.views}
-                  </span>
-                </div>
-
-                <h3 className="text-lg md:text-xl font-semibold font-sans leading-snug border-b border-slate-200 pb-4 pr-8 text-slate-950">
-                  {selectedNotice.title}
-                </h3>
-
-                <div className="text-xs md:text-sm text-slate-700 font-light leading-relaxed whitespace-pre-wrap py-2">
-                  {selectedNotice.content}
-                </div>
-
-                <div className="border-t border-slate-100 pt-6 flex justify-between items-center text-xs text-slate-500">
-                  <span>사단법인 한국치어리딩협회 (KCF) 사무국</span>
-                  <button
-                    id="confirm-notice-detail-btn"
-                    onClick={() => setSelectedNotice(null)}
-                    className="bg-blue-700 text-white hover:bg-blue-800 px-5 py-2 rounded-full font-medium shadow-md shadow-blue-100 transition cursor-pointer"
-                  >
-                    확인
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
