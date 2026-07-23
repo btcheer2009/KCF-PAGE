@@ -191,35 +191,49 @@ export default function AdminMediaManager({
 
     setIsSaving(true);
 
-    try {
-      const existingMediaId = editingPost ? editingPost.id : `media-${Date.now()}`;
-      
-      const newPostItem: MediaPost = {
-        id: existingMediaId,
-        type: mediaType,
-        title: title.trim(),
-        date: date || new Date().toISOString().split('T')[0],
-        views: editingPost ? (editingPost.views || 0) : 1,
-        isImportant,
-        isPublished,
-        content: content.trim(),
-        coverImage: coverImage.trim() || (images[0] || ''),
-        images: mediaType === 'photo' ? (images.length > 0 ? images : (coverImage ? [coverImage] : [])) : undefined,
-        thumbnail: thumbnail.trim() || coverImage.trim(),
-        videoUrl: videoUrl.trim(),
-        videoUrls: videoUrl.trim() ? [videoUrl.trim()] : undefined,
-        videoType,
-        videoDescription: videoDescription.trim(),
-        pressName: pressName.trim(),
-        originalUrl: originalUrl.trim(),
-        attachmentUrl: attachmentUrl.trim(),
-        summary: summary.trim(),
-        publicId: coverImagePublicId || undefined,
-        thumbnailPublicId: thumbnailPublicId || undefined,
-        videoPublicId: videoPublicId || undefined,
-      };
+    const existingMediaId = editingPost ? editingPost.id : `media-${Date.now()}`;
+    const coverUrlFinal = coverImage.trim() || (images[0] || '');
+    const thumbnailFinal = thumbnail.trim() || coverUrlFinal;
 
+    const newPostItem: MediaPost = {
+      id: existingMediaId,
+      type: mediaType,
+      title: title.trim(),
+      date: date || new Date().toISOString().split('T')[0],
+      views: editingPost ? (editingPost.views || 0) : 1,
+      isImportant,
+      isPublished,
+      content: content.trim(),
+      coverImage: coverUrlFinal,
+      images: mediaType === 'photo' ? (images.length > 0 ? images : (coverUrlFinal ? [coverUrlFinal] : [])) : undefined,
+      thumbnail: thumbnailFinal,
+      videoUrl: videoUrl.trim(),
+      videoUrls: videoUrl.trim() ? [videoUrl.trim()] : undefined,
+      videoType,
+      videoDescription: videoDescription.trim(),
+      pressName: pressName.trim(),
+      originalUrl: originalUrl.trim(),
+      attachmentUrl: attachmentUrl.trim(),
+      summary: summary.trim(),
+      publicId: coverImagePublicId || undefined,
+      thumbnailPublicId: thumbnailPublicId || undefined,
+      videoPublicId: videoPublicId || undefined,
+    };
+
+    console.log('[Media Save Stage 1] Cloudinary upload check:', {
+      hasCoverImage: !!coverUrlFinal,
+      coverPublicId: coverImagePublicId,
+      hasVideo: !!videoUrl,
+      videoPublicId: videoPublicId,
+      targetPostId: existingMediaId,
+    });
+
+    try {
+      console.log('[Media Save Stage 2] Saving post to Firestore collection media_posts:', newPostItem);
+      
       await saveItem<MediaPost>('media_posts', newPostItem);
+
+      console.log('[Media Save Stage 3] Post saved successfully to persistent store:', existingMediaId);
 
       let updated: MediaPost[];
       if (editingPost) {
@@ -227,14 +241,32 @@ export default function AdminMediaManager({
         showToast('미디어 게시물이 수정되었습니다.', 'success');
       } else {
         updated = [newPostItem, ...mediaPosts];
-        showToast('새 미디어 게시물이 등록되었습니다.', 'success');
+        showToast('미디어 게시물이 등록되었습니다.', 'success');
       }
 
       setMediaPosts(updated);
       resetForm();
     } catch (e: any) {
-      console.error('Failed to save media:', e);
-      showToast('미디어 게시물 저장 중 오류가 발생했습니다.', 'error');
+      console.error('[Media Save Error] Failed to save media post:', {
+        postId: existingMediaId,
+        errorMessage: e?.message || String(e),
+        errorStack: e?.stack,
+        cloudinaryUploaded: {
+          coverPublicId: coverImagePublicId,
+          videoPublicId: videoPublicId,
+        },
+      });
+
+      const msg = e?.message || '';
+      if (msg.includes('permission') || msg.includes('Permission') || msg.includes('unauthenticated')) {
+        showToast('관리자 인증이 만료되었거나 권한이 없습니다. 다시 로그인해 주세요.', 'error');
+      } else if (msg.includes('network') || msg.includes('Network') || msg.includes('offline')) {
+        showToast('네트워크 연결을 확인해 주세요.', 'error');
+      } else if (msg.includes('invalid') || msg.includes('Unsupported field value')) {
+        showToast('게시물 데이터 형식이 올바르지 않습니다.', 'error');
+      } else {
+        showToast('서버에서 게시물을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+      }
     } finally {
       setIsSaving(false);
     }

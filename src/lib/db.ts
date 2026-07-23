@@ -181,6 +181,25 @@ export function listenDoc<T>(
   });
 }
 
+export function sanitizeForFirestore<T>(data: T): T {
+  if (data === null || data === undefined) {
+    return data;
+  }
+  if (Array.isArray(data)) {
+    return data.map(item => sanitizeForFirestore(item)) as unknown as T;
+  }
+  if (typeof data === 'object' && !(data instanceof Date)) {
+    const cleaned: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== undefined) {
+        cleaned[key] = sanitizeForFirestore(value);
+      }
+    }
+    return cleaned as T;
+  }
+  return data;
+}
+
 /**
  * Saves or updates an item in a Firestore collection.
  */
@@ -188,7 +207,8 @@ export async function saveItem<T extends { id: string }>(colName: string, item: 
 export async function saveItem(colName: string, id: string, data: any): Promise<void>;
 export async function saveItem(colName: string, idOrItem: any, data?: any) {
   const id = typeof idOrItem === 'string' ? idOrItem : idOrItem?.id;
-  const payload = typeof idOrItem === 'string' ? data : idOrItem;
+  const rawPayload = typeof idOrItem === 'string' ? data : idOrItem;
+  const payload = sanitizeForFirestore(rawPayload);
   try {
     await setDoc(doc(db, colName, id), payload);
   } catch (e) {
